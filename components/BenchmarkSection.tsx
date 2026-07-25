@@ -90,7 +90,7 @@ const ecosystem = [
       </svg>
     ),
     name: "Transitions",
-    tag: "v2",
+    tag: "official",
     description: "Animate elements as they enter and leave, with built-in transitions and full support for custom ones.",
     links: [{ label: "Docs", href: "/docs/transitions" }],
     accent: "#25C97E",

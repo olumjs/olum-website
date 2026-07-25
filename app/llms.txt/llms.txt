@@ -366,7 +366,7 @@ A component's `<style>` is auto-scoped (compiler tags elements with a unique att
 
 ## Transitions — `<transition>`
 
-Wrap **one element** to animate its enter/leave. Intro plays when it enters (`<if>` adds it); removal is deferred so the outro plays first.
+Wrap **one element** to animate its enter/leave. Intro plays when it enters (`<if>` adds it); removal is deferred so the outro plays first. Transitions are an **optional package** — `npm i olum-transition` enables them; without it `<transition>` markup is inert (one-time console warning).
 ```html
 <if when="state.visible">
   <transition transition="fade"><p>Fades in and out</p></transition>   <!-- same in+out -->
@@ -508,7 +508,7 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 
 ## Known limitations
 
-- **No AST compiler** (regex + jsdom) — robust for common cases, fragile at some edges.
+- **Hybrid compiler passes** — templates parse through a real HTML AST (parse5) and component JS through a real JS AST (acorn), but interpolation/codegen still involve regex passes over serialized markup; robust for common cases, fragile at some edges.
 - **Global reactivity bus** — broadcast dispatch, O(N) per update.
 - **No element refs / actions / dynamic `<component is>` / dimension bindings** — all done imperatively in `onMount`.
 - **No integrated component testing** framework yet.

@@ -13,6 +13,10 @@ export const DOC_REPOS = [
     minVer: "v0.5.5",
   },
   {
+    repo: "olumjs/olum-transition",
+    minVer: "v0.2.0",
+  },
+  {
     repo: "olumjs/olum-router",
     minVer: "v0.3.1",
   },

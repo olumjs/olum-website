@@ -190,7 +190,7 @@ export default function Playground({
     const embedTheme =
       document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
 
-    // Import and run the GitHub repo (olumjs/olum-starter@compact) live in
+    // Import and run the GitHub repo (olumjs/olum-starter@examples) live in
     // StackBlitz WebContainers — no StackBlitz-hosted project involved.
     sdk
       .embedGithubProject(target, STARTER_REPO_SLUG, {

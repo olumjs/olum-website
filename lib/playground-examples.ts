@@ -1,5 +1,5 @@
 // The playground's example catalogue is derived at build time from the
-// `olum-starter` repo (compact branch): every
+// `olum-starter` repo (examples branch): every
 // `src/(examples)/<group>/<item>/page.html` becomes one dropdown entry. The
 // folder names carry an ordering prefix (`00-introduction`, `00-hello-world`,
 // `20-7guis`) that the starter's own router strips — along with the
@@ -34,12 +34,12 @@ export type PlaygroundGroup = { slug: string; label: string; items: PlaygroundEx
 // This module stays free of Node built-ins so the client bundle can import the
 // pure helpers below.
 export const REPO = "olumjs/olum-starter";
-export const BRANCH = "compact";
+export const BRANCH = "examples";
 export const EXAMPLES_ROOT = "src/(examples)";
 
 /**
  * The GitHub repo StackBlitz imports and runs live — `owner/repo/tree/branch`,
- * i.e. https://github.com/olumjs/olum-starter/tree/compact. Not a StackBlitz-
+ * i.e. https://github.com/olumjs/olum-starter/tree/examples. Not a StackBlitz-
  * hosted project; the embed clones this repo into WebContainers.
  */
 export const STARTER_REPO_SLUG = `${REPO}/tree/${BRANCH}`;

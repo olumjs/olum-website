@@ -3,7 +3,7 @@ import Image from "next/image";
 import CliCommand from "@/components/CliCommand";
 import { general } from "@/lib/data";
 
-const CLI_CMD = "npx create-olum@latest my-app";
+const CLI_CMD = "npx create-olum my-app --tailwind";
 
 /* ─── Hero ─────────────────────────────────────────────────── */
 export default function Hero() {
@@ -147,6 +147,9 @@ export default function Hero() {
 
         {/* CLI command */}
         <CliCommand cmd={CLI_CMD} className="animate-fade-up animate-fade-up-6 w-full max-w-md" />
+        <p className="animate-fade-up animate-fade-up-6 text-xs text-[var(--fg-subtle)] font-mono -mt-4">
+          Omit <span className="text-[var(--fg-2)]">--tailwind</span> to skip Tailwind CSS setup.
+        </p>
 
         {/* Stats */}
         {/* <div

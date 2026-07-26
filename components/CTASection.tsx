@@ -1,6 +1,6 @@
 import CliCommand from "@/components/CliCommand";
 
-const CLI_CMD = "npx create-olum@latest my-app";
+const CLI_CMD = "npx create-olum my-app --tailwind";
 
 export default function CTASection() {
   return (
@@ -46,7 +46,10 @@ export default function CTASection() {
           One command. Full-stack ready. No configuration hell. Just code.
         </p>
 
-        <CliCommand cmd={CLI_CMD} className="max-w-lg mx-auto mb-8" />
+        <CliCommand cmd={CLI_CMD} className="max-w-lg mx-auto" />
+        <p className="text-xs text-[var(--fg-subtle)] font-mono mb-8 mt-2">
+          Omit <span className="text-[var(--fg-2)]">--tailwind</span> to skip Tailwind CSS setup.
+        </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <a

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SidebarGroup, SidebarItem } from "@/lib/docs-content";
 import {
   DropdownMenu,
@@ -25,6 +25,15 @@ export default function DocsSidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // The sidebar remounts on every doc navigation (it's rendered per-page, not
+  // in a shared layout), so restore its scroll offset from sessionStorage
+  // rather than relying on the DOM node surviving across pages.
+  useLayoutEffect(() => {
+    const saved = sessionStorage.getItem("docs-sidebar-scroll");
+    if (saved && scrollRef.current) scrollRef.current.scrollTop = Number(saved);
+  }, []);
 
   const [state, setState] = useState<Record<string, SectionState>>(() => {
     const init: Record<string, SectionState> = {};
@@ -34,7 +43,24 @@ export default function DocsSidebar({
     return init;
   });
 
+  // Only the section containing the currently viewed doc starts expanded.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const activeLabel = groups.find((g) =>
+      activeRepo
+        ? g.repo === activeRepo
+        : g.items.some((i) => i.href.split("?")[0] === pathname)
+    )?.label;
+    const init: Record<string, boolean> = {};
+    for (const g of groups) init[g.label] = g.label === activeLabel;
+    if (!activeLabel && groups[0]) init[groups[0].label] = true;
+    return init;
+  });
+
+  const toggleGroup = (label: string) =>
+    setOpenGroups((s) => ({ ...s, [label]: !s[label] }));
+
   async function selectBranch(group: SidebarGroup, branch: string, syncUrl = true) {
+    setOpenGroups((s) => ({ ...s, [group.label]: true }));
     const repo = group.repo!;
     const fixed = group.items.filter((i) => i.fixed);
     const isDefault = branch === group.defaultBranch;
@@ -89,17 +115,40 @@ export default function DocsSidebar({
 
   return (
     <aside className="hidden lg:block w-60 shrink-0">
-      <div className="sticky top-24 overflow-y-auto max-h-[calc(100vh-6rem)] pr-2 scrollbar-thin">
-        <nav className="space-y-6">
+      <div
+        ref={scrollRef}
+        onScroll={(e) => sessionStorage.setItem("docs-sidebar-scroll", String(e.currentTarget.scrollTop))}
+        className="sticky top-24 overflow-y-auto max-h-[calc(100vh-6rem)] pr-2 scrollbar-thin"
+      >
+        <nav className="space-y-6 pb-12">
           {groups.map((group) => {
             const st = group.repo ? state[group.repo] : undefined;
             const items = st ? st.items : group.items;
+            const isOpen = !!openGroups[group.label];
             return (
               <div key={group.label}>
                 <div className="flex items-center justify-between gap-2 mb-2 px-3">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--fg-subtle)] font-mono">
-                    {group.label}
-                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.label)}
+                    aria-expanded={isOpen}
+                    className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-[var(--fg)] font-mono cursor-pointer hover:text-[#25C97E]"
+                  >
+                    <svg
+                      width="8"
+                      height="8"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className={`shrink-0 opacity-70 transition-transform duration-150 ${
+                        isOpen ? "rotate-90" : ""
+                      }`}
+                    >
+                      <path d="M4.5 3L7.5 6L4.5 9" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <h4>{group.label}</h4>
+                  </button>
                   {group.branches && group.branches.length > 0 && (
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -134,7 +183,7 @@ export default function DocsSidebar({
                     </DropdownMenu>
                   )}
                 </div>
-                {st?.loading ? (
+                {!isOpen ? null : st?.loading ? (
                   <p className="px-3 py-1.5 text-xs text-[var(--fg-subtle)] font-mono">Loading…</p>
                 ) : (
                   <ul className="space-y-0.5">

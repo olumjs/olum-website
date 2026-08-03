@@ -3,7 +3,8 @@ const techStack = [
   { name: "Vite",       slug: "vite",       color: "#646CFF" },
   { name: "Tailwind",   slug: "tailwindcss", color: "#06B6D4" },
   { name: "Node.js",    slug: "nodedotjs",  color: "#5FA04E" },
-  { name: "Vercel",     slug: "vercel",     color: "#ffffff" },
+  { name: "Vercel",     slug: "vercel",     color: "#ffffff", mono: true },
+  { name: "StackBlitz", slug: "stackblitz", color: "#1269D3" },
 ];
 
 export default function ShowcaseSection() {
@@ -33,7 +34,7 @@ export default function ShowcaseSection() {
                 alt={tech.name}
                 width={52}
                 height={52}
-                className={`sc-img transition-all duration-300${tech.slug === "vercel" ? " sc-img-vercel" : ""}`}
+                className={`sc-img transition-all duration-300${tech.mono ? " sc-img-mono" : ""}`}
               />
               <span className="text-[9px] font-mono tracking-[0.18em] uppercase text-[var(--fg-2)] opacity-60 group-hover:opacity-100 transition-opacity duration-300">
                 {tech.name}
@@ -54,17 +55,17 @@ export default function ShowcaseSection() {
           opacity: 1;
           transform: translateY(-2px);
         }
-        .sc-img-vercel {
+        .sc-img-mono {
           opacity: 0.7;
         }
-        .sc-logo:hover .sc-img-vercel {
+        .sc-logo:hover .sc-img-mono {
           opacity: 1;
         }
-        [data-theme="light"] .sc-img-vercel {
+        [data-theme="light"] .sc-img-mono {
           filter: grayscale(1) invert(1) brightness(0.45);
           opacity: 0.7;
         }
-        [data-theme="light"] .sc-logo:hover .sc-img-vercel {
+        [data-theme="light"] .sc-logo:hover .sc-img-mono {
           filter: invert(1);
           opacity: 1;
         }

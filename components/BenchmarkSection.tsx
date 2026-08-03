@@ -1,28 +1,30 @@
 "use client";
 
+import Link from "next/link";
+
 const ecosystem = [
-  {
-    icon: (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="16 18 22 12 16 6" />
-        <polyline points="8 6 2 12 8 18" />
-      </svg>
-    ),
-    name: "Plain HTML",
-    tag: "zero-config",
-    description:
-      "Components are ordinary `.html` files — no custom file type. Every editor understands them out of the box, with no extension, formatter, or syntax plugin to install.",
-    accent: "#25C97E",
-  },
+  // {
+  //   icon: (
+  //     <svg
+  //       width="22"
+  //       height="22"
+  //       viewBox="0 0 24 24"
+  //       fill="none"
+  //       stroke="currentColor"
+  //       strokeWidth="1.8"
+  //       strokeLinecap="round"
+  //       strokeLinejoin="round"
+  //     >
+  //       <polyline points="16 18 22 12 16 6" />
+  //       <polyline points="8 6 2 12 8 18" />
+  //     </svg>
+  //   ),
+  //   name: "Plain HTML",
+  //   tag: "zero-config",
+  //   description:
+  //     "Components are ordinary `.html` files — no custom file type. Every editor understands them out of the box, with no extension, formatter, or syntax plugin to install.",
+  //   accent: "#25C97E",
+  // },
   {
     icon: (
       <svg
@@ -45,7 +47,7 @@ const ecosystem = [
     tag: "official",
     description: "File-based routing with dynamic segments, nested layouts, and async data loading. Zero-config, instant HMR.",
     links: [
-      { label: "Docs", href: "http://localhost:3000/docs/router" },
+      { label: "Docs", href: "/docs/router" },
       { label: "npm", href: "https://www.npmjs.com/package/olum-router" },
     ],
     accent: "#25C97E",
@@ -70,7 +72,7 @@ const ecosystem = [
     name: "Store",
     tag: "official",
     description: "Plain object-style global state. Define it once, import anywhere — components subscribe just by reading it, no providers or wiring.",
-    links: [{ label: "npm", href: "https://www.npmjs.com/package/olum-store" }],
+    links: [{ label: "npm", href: "/docs/global-store" }],
     accent: "#25C97E",
   },
   {
@@ -93,6 +95,31 @@ const ecosystem = [
     tag: "official",
     description: "Animate elements as they enter and leave, with built-in transitions and full support for custom ones.",
     links: [{ label: "Docs", href: "/docs/transitions" }],
+    accent: "#25C97E",
+  },
+  {
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </svg>
+    ),
+    name: "Olum UI",
+    tag: "official",
+    description:
+      "A shadcn-inspired component library built for Olum. Copy components straight into your project and own the code — no npm dependency, no black box.",
+    links: [{ label: "ui.olumjs.top", href: "https://ui.olumjs.top" }],
     accent: "#25C97E",
   },
   {
@@ -192,51 +219,95 @@ export default function BenchmarkSection() {
 
         {/* Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {ecosystem.map((item) => (
-            <div
-              key={item.name}
-              className="group relative rounded-2xl bg-[var(--card)] border border-[var(--border)] p-6 flex flex-col gap-4 hover:border-[var(--card-hover-bd)] transition-all duration-300 hover:-translate-y-0.5"
-              style={{ "--item-accent": item.accent } as React.CSSProperties}
-            >
-              {/* Hover glow */}
-              <div
-                className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                style={{ background: `radial-gradient(ellipse at 30% 20%, ${item.accent}0d 0%, transparent 65%)` }}
-              />
+          {ecosystem.map((item) => {
+            const href = item.links?.[0]?.href;
+            const cardClassName =
+              "group relative rounded-2xl bg-[var(--card)] border border-[var(--border)] p-6 flex flex-col gap-4 hover:border-[var(--card-hover-bd)] transition-all duration-300 hover:-translate-y-0.5" +
+              (href ? " no-underline cursor-pointer" : "");
+            const cardStyle = { "--item-accent": item.accent } as React.CSSProperties;
 
-              {/* Icon + tag */}
-              <div className="relative flex items-start justify-between">
+            const content = (
+              <>
+                {/* Hover glow */}
                 <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center"
-                  style={{
-                    background: `${item.accent}18`,
-                    border: `1px solid ${item.accent}30`,
-                    color: item.accent,
-                  }}
-                >
-                  {item.icon}
-                </div>
-                <span
-                  className="text-[10px] font-mono font-semibold uppercase tracking-widest px-2 py-1 rounded-md"
-                  style={{
-                    background: `${item.accent}12`,
-                    border: `1px solid ${item.accent}28`,
-                    color: item.accent,
-                  }}
-                >
-                  {item.tag}
-                </span>
-              </div>
+                  className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                  style={{ background: `radial-gradient(ellipse at 30% 20%, ${item.accent}0d 0%, transparent 65%)` }}
+                />
 
-              {/* Name + description */}
-              <div className="relative flex flex-col gap-1.5">
-                <h3 className="text-base font-bold text-[var(--fg)]" style={{ fontFamily: "var(--font-syne)" }}>
-                  {item.name}
-                </h3>
-                <p className="text-sm text-[var(--fg-muted)] leading-relaxed">{item.description}</p>
-              </div>
-            </div>
-          ))}
+                {/* Icon + tag */}
+                <div className="relative flex items-start justify-between">
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center"
+                    style={{
+                      background: `${item.accent}18`,
+                      border: `1px solid ${item.accent}30`,
+                      color: item.accent,
+                    }}
+                  >
+                    {item.icon}
+                  </div>
+                  <span
+                    className="text-[10px] font-mono font-semibold uppercase tracking-widest px-2 py-1 rounded-md"
+                    style={{
+                      background: `${item.accent}12`,
+                      border: `1px solid ${item.accent}28`,
+                      color: item.accent,
+                    }}
+                  >
+                    {item.tag}
+                  </span>
+                </div>
+
+                {/* Name + description */}
+                <div className="relative flex flex-col gap-1.5">
+                  <h3
+                    className="flex items-center gap-1.5 text-base font-bold text-[var(--fg)] group-hover:text-[#25C97E] transition-colors"
+                    style={{ fontFamily: "var(--font-syne)" }}
+                  >
+                    {item.name}
+                    {href && (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 14 14"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
+                      >
+                        <path d="M2 7h10M8 3l4 4-4 4" />
+                      </svg>
+                    )}
+                  </h3>
+                  <p className="text-sm text-[var(--fg-muted)] leading-relaxed">{item.description}</p>
+                </div>
+              </>
+            );
+
+            if (!href) {
+              return (
+                <div key={item.name} className={cardClassName} style={cardStyle}>
+                  {content}
+                </div>
+              );
+            }
+
+            if (href.startsWith("http")) {
+              return (
+                <a key={item.name} href={href} target="_blank" rel="noopener noreferrer" className={cardClassName} style={cardStyle}>
+                  {content}
+                </a>
+              );
+            }
+
+            return (
+              <Link key={item.name} href={href} className={cardClassName} style={cardStyle}>
+                {content}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>

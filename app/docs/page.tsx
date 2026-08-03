@@ -46,6 +46,8 @@ const nextSteps = [
   { label: "Component File Structure", href: "/docs/component-structure", desc: "Learn how .html component files are structured.", icon: "🧩" },
   { label: "State & Reactivity", href: "/docs/state", desc: "Understand how state drives re-renders.", icon: "⚡" },
   { label: "Quick Reference", href: "/docs/quick-reference", desc: "A cheat-sheet of all template syntax.", icon: "📋" },
+  { label: "Live Sandbox", href: "https://code.olumjs.top", desc: "Try OlumJS instantly in your browser — no install required.", icon: "🧪", external: true },
+  { label: "Olum UI", href: "https://ui.olumjs.top", desc: "Copy-paste components, styled and ready to own.", icon: "🎨", external: true },
 ];
 
 export default async function DocsPage() {
@@ -151,21 +153,39 @@ export default async function DocsPage() {
                   {sections[1]}
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {nextSteps.map((card) => (
-                    <Link
-                      key={card.label}
-                      href={card.href}
-                      className="card-glow flex gap-4 p-5 rounded-xl bg-[var(--card)] border border-[var(--border)] group"
-                    >
-                      <span className="text-2xl mt-0.5">{card.icon}</span>
-                      <div>
-                        <h3 className="font-semibold text-[var(--fg)] group-hover:text-[#25C97E] transition-colors mb-1">
-                          {card.label}
-                        </h3>
-                        <p className="text-sm text-[var(--fg-muted)]">{card.desc}</p>
-                      </div>
-                    </Link>
-                  ))}
+                  {nextSteps.map((card) =>
+                    card.external ? (
+                      <a
+                        key={card.label}
+                        href={card.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="card-glow flex gap-4 p-5 rounded-xl bg-[var(--card)] border border-[var(--border)] group"
+                      >
+                        <span className="text-2xl mt-0.5">{card.icon}</span>
+                        <div>
+                          <h3 className="font-semibold text-[var(--fg)] group-hover:text-[#25C97E] transition-colors mb-1">
+                            {card.label}
+                          </h3>
+                          <p className="text-sm text-[var(--fg-muted)]">{card.desc}</p>
+                        </div>
+                      </a>
+                    ) : (
+                      <Link
+                        key={card.label}
+                        href={card.href}
+                        className="card-glow flex gap-4 p-5 rounded-xl bg-[var(--card)] border border-[var(--border)] group"
+                      >
+                        <span className="text-2xl mt-0.5">{card.icon}</span>
+                        <div>
+                          <h3 className="font-semibold text-[var(--fg)] group-hover:text-[#25C97E] transition-colors mb-1">
+                            {card.label}
+                          </h3>
+                          <p className="text-sm text-[var(--fg-muted)]">{card.desc}</p>
+                        </div>
+                      </Link>
+                    )
+                  )}
                 </div>
               </section>
 

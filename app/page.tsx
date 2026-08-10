@@ -1,5 +1,6 @@
 import Hero from "@/components/Hero";
 import FeatureSection from "@/components/FeatureSection";
+import SyntaxCompareSection from "@/components/SyntaxCompareSection";
 import BenchmarkSection from "@/components/BenchmarkSection";
 // import TestimonialsSection from "@/components/TestimonialsSection";
 import ShowcaseSection from "@/components/ShowcaseSection";
@@ -12,6 +13,7 @@ export default function Home() {
     <main>
       <Hero />
       <FeatureSection />
+      <SyntaxCompareSection />
       <BenchmarkSection />
       {/* <TestimonialsSection /> */}
       <ShowcaseSection />

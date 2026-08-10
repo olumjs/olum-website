@@ -3,28 +3,51 @@
 import Link from "next/link";
 
 const ecosystem = [
-  // {
-  //   icon: (
-  //     <svg
-  //       width="22"
-  //       height="22"
-  //       viewBox="0 0 24 24"
-  //       fill="none"
-  //       stroke="currentColor"
-  //       strokeWidth="1.8"
-  //       strokeLinecap="round"
-  //       strokeLinejoin="round"
-  //     >
-  //       <polyline points="16 18 22 12 16 6" />
-  //       <polyline points="8 6 2 12 8 18" />
-  //     </svg>
-  //   ),
-  //   name: "Plain HTML",
-  //   tag: "zero-config",
-  //   description:
-  //     "Components are ordinary `.html` files — no custom file type. Every editor understands them out of the box, with no extension, formatter, or syntax plugin to install.",
-  //   accent: "#25C97E",
-  // },
+  {
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </svg>
+    ),
+    name: "Plain HTML",
+    tag: "zero-config",
+    description: "Components are ordinary `.html` files — no extension, formatter, or plugin required.",
+    accent: "#25C97E",
+  },
+  {
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m4 17 6-6-6-6" />
+        <path d="M12 19h8" />
+      </svg>
+    ),
+    name: "CLI",
+    tag: "official",
+    description: "Scaffold Olum apps and pull Olum UI components straight into your codebase — no extra deps.",
+    links: [
+      { label: "npm", href: "https://www.npmjs.com/package/olum-cli" },
+    ],
+    accent: "#25C97E",
+  },
   {
     icon: (
       <svg
@@ -45,7 +68,7 @@ const ecosystem = [
     ),
     name: "Router",
     tag: "official",
-    description: "File-based routing with dynamic segments, nested layouts, and async data loading. Zero-config, instant HMR.",
+    description: "File-based routing with dynamic segments, nested layouts, and async data loading.",
     links: [
       { label: "Docs", href: "/docs/router" },
       { label: "npm", href: "https://www.npmjs.com/package/olum-router" },
@@ -71,7 +94,7 @@ const ecosystem = [
     ),
     name: "Store",
     tag: "official",
-    description: "Plain object-style global state. Define it once, import anywhere — components subscribe just by reading it, no providers or wiring.",
+    description: "Plain object-style global state — define it once, import anywhere, no providers to wire up.",
     links: [{ label: "npm", href: "/docs/global-store" }],
     accent: "#25C97E",
   },
@@ -93,7 +116,7 @@ const ecosystem = [
     ),
     name: "Transitions",
     tag: "official",
-    description: "Animate elements as they enter and leave, with built-in transitions and full support for custom ones.",
+    description: "Animate elements as they enter and leave, with built-in and fully custom transitions.",
     links: [{ label: "Docs", href: "/docs/transitions" }],
     accent: "#25C97E",
   },
@@ -117,9 +140,32 @@ const ecosystem = [
     ),
     name: "Olum UI",
     tag: "official",
-    description:
-      "A shadcn-inspired component library built for Olum. Copy components straight into your project and own the code — no npm dependency, no black box.",
+    description: "A shadcn-inspired component library — copy components into your project and own the code.",
     links: [{ label: "ui.olumjs.top", href: "https://ui.olumjs.top" }],
+    accent: "#25C97E",
+  },
+  {
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </svg>
+    ),
+    name: "Olum Icons",
+    tag: "official",
+    description: "A framework-agnostic icon library — plain SVG strings from Lucide, Heroicons, and Font Awesome.",
+    links: [{ label: "icons.olumjs.top", href: "https://icons.olumjs.top" }],
     accent: "#25C97E",
   },
   {
@@ -146,8 +192,7 @@ const ecosystem = [
     ),
     name: "Editor Extension",
     tag: "IDE",
-    description:
-      "Syntax highlighting, IntelliSense, auto-imports, and inline signal previews for `.html` single-file components. Works in VS Code and any Open VSX editor like Cursor.",
+    description: "Syntax highlighting, IntelliSense, auto-imports, and inline previews for `.html` components.",
     links: [
       { label: "VSC Marketplace", href: "https://marketplace.visualstudio.com/items?itemName=eissapk.olum" },
       { label: "VSX Marketplace", href: "https://open-vsx.org/extension/eissapk/olum" },
@@ -172,8 +217,7 @@ const ecosystem = [
     ),
     name: "Dev Tools",
     tag: "official",
-    description:
-      "Visualize the component tree, inspect and tweak state live, and time-travel through changes — all built right in, no install needed.",
+    description: "Visualize the component tree, tweak state live, and time-travel through changes.",
     // links: [{ label: "Chrome", href: "#" }, { label: "Firefox", href: "#" }],
     accent: "#25C97E",
   },
@@ -281,7 +325,7 @@ export default function BenchmarkSection() {
                       </svg>
                     )}
                   </h3>
-                  <p className="text-sm text-[var(--fg-muted)] leading-relaxed">{item.description}</p>
+                  <p className="text-sm text-[var(--fg-muted)] leading-relaxed line-clamp-2">{item.description}</p>
                 </div>
               </>
             );

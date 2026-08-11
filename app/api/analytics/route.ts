@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid body" }, { status: 400 });
   }
 
-  const { route, blogSlug, device, os, browser, timezone, referrer, ip } =
+  // IPs are intentionally not collected or stored — any `ip` field in the body is ignored.
+  const { route, blogSlug, device, os, browser, timezone, referrer } =
     body as Record<string, unknown>;
 
   if (typeof route !== "string" || !route) {
@@ -62,7 +63,6 @@ export async function POST(req: NextRequest) {
     ts: Date.now(),
     ...(typeof blogSlug === "string" && blogSlug ? { blogSlug } : {}),
     ...(typeof referrer === "string" && referrer ? { referrer } : {}),
-    ...(typeof ip === "string" && ip && ip !== "n/a" ? { ip } : {}),
   });
 
   return NextResponse.json({ ok: true });

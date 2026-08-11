@@ -19,7 +19,6 @@ interface RecentVisit {
   ts: number;
   blogSlug?: string;
   referrer?: string;
-  ip?: string;
 }
 
 interface AnalyticsData {
@@ -359,7 +358,6 @@ export default function AnalyticsDashboard() {
   const [visitsSearch, setVisitsSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>("all");
   const [visitsFullscreen, setVisitsFullscreen] = useState(false);
-  const [uniqueOnly, setUniqueOnly] = useState(true);
   const [hideBots, setHideBots] = useState(true);
 
   // Auto-login from session storage
@@ -449,25 +447,11 @@ export default function AnalyticsDashboard() {
     return counts;
   }, [activeData]);
 
-  // Visits to show in the table — optionally collapsed to one row per unique visitor.
-  // Visits arrive newest-first, so keeping the first occurrence keeps the latest visit.
-  // Rows without a real IP can't be matched, so they're always kept.
+  // Visits to show in the table — every visit, minus bots when that filter is on.
   const visibleVisits = useMemo<RecentVisit[]>(() => {
-    let visits = activeData?.recentVisits ?? [];
-    if (hideBots) visits = visits.filter((v) => !isBotVisit(v));
-    if (!uniqueOnly) return visits;
-    const seen = new Set<string>();
-    const out: RecentVisit[] = [];
-    for (const v of visits) {
-      const ip = v.ip && v.ip !== "n/a" ? v.ip : null;
-      if (!ip) { out.push(v); continue; }
-      const key = `${ip}|${v.timezone}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(v);
-    }
-    return out;
-  }, [activeData, uniqueOnly, hideBots]);
+    const visits = activeData?.recentVisits ?? [];
+    return hideBots ? visits.filter((v) => !isBotVisit(v)) : visits;
+  }, [activeData, hideBots]);
 
   // Change the range and reset the search so filtered results aren't confusing.
   const changeDateRange = (range: DateRange) => {
@@ -728,20 +712,9 @@ export default function AnalyticsDashboard() {
             >
               Hide bots
             </button>
-            <button
-              onClick={() => setUniqueOnly((v) => !v)}
-              title={uniqueOnly ? "Showing unique visitors (deduped by IP + timezone)" : "Showing every visit"}
-              className={`shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono transition-colors ${
-                uniqueOnly
-                  ? "bg-[var(--accent)]/15 text-[var(--accent)]"
-                  : "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)]"
-              }`}
-            >
-              Unique
-            </button>
             {!!visibleVisits.length && (
               <span className="font-mono text-[11px] text-[var(--fg-muted)] shrink-0">
-                {visibleVisits.length} {uniqueOnly ? "unique" : "entries"}
+                {visibleVisits.length} entries
               </span>
             )}
             <button
@@ -766,7 +739,7 @@ export default function AnalyticsDashboard() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {["Route", "Blog Slug", "Referrer", "IP", "Device", "OS", "Browser", "Timezone", "Time"].map((h) => (
+                {["Route", "Blog Slug", "Referrer", "Device", "OS", "Browser", "Timezone", "Time"].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)] whitespace-nowrap"
@@ -780,7 +753,7 @@ export default function AnalyticsDashboard() {
               {!visibleVisits.length ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={8}
                     className="px-4 py-10 text-center font-mono text-xs text-[var(--fg-muted)] opacity-40"
                   >
                     No visits recorded yet
@@ -791,7 +764,7 @@ export default function AnalyticsDashboard() {
                 .filter((v) => {
                   const q = visitsSearch.toLowerCase();
                   if (!q) return true;
-                  return [v.route, v.blogSlug, v.referrer, v.ip, v.device, v.os, v.browser, v.timezone]
+                  return [v.route, v.blogSlug, v.referrer, v.device, v.os, v.browser, v.timezone]
                     .some((f) => f?.toLowerCase().includes(q));
                 })
                 .map((v) => (
@@ -810,11 +783,6 @@ export default function AnalyticsDashboard() {
                     <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] max-w-[120px]">
                       {v.referrer
                         ? <span className="block truncate" title={v.referrer}>{extractHostname(v.referrer)}</span>
-                        : <span className="opacity-30">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
-                      {v.ip
-                        ? <a href={`https://www.iplocation.net/?query=${v.ip}`} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">{v.ip}</a>
                         : <span className="opacity-30">—</span>}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap capitalize">

@@ -28,25 +28,6 @@ interface UAData {
   browser: string;
 }
 
-const IP_ENDPOINTS = [
-  "https://icanhazip.com/",
-  "https://wtfismyip.com/text",
-  "https://ifconfig.me/ip",
-];
-
-async function getUserIp(): Promise<string> {
-  for (const url of IP_ENDPOINTS) {
-    try {
-      const res = await fetch(url);
-      const text = await res.text();
-      return text.trim();
-    } catch {
-      // try next endpoint
-    }
-  }
-  return "n/a";
-}
-
 function getTrafficSource(): string | undefined {
   return document.cookie
     .split("; ")
@@ -54,7 +35,7 @@ function getTrafficSource(): string | undefined {
     ?.split("=")[1];
 }
 
-function sendAnalytics(pathname: string, ua: UAData, ip?: string) {
+function sendAnalytics(pathname: string, ua: UAData) {
   try {
     // Record each route at most once per session.
     const pageKey = `a_p_${pathname}`;
@@ -79,7 +60,6 @@ function sendAnalytics(pathname: string, ua: UAData, ip?: string) {
         browser: ua.browser,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(referrer ? { referrer } : {}),
-        ...(ip ? { ip } : {}),
         isNewSession,
       }),
     }).catch(() => {});
@@ -101,7 +81,7 @@ export default function AnalyticsTracker() {
     if (uaRef.current) sendAnalytics(pathname, uaRef.current);
   }, [pathname]);
 
-  async function handleLoad() {
+  function handleLoad() {
     if (!window.UAParser) return;
     const result = new window.UAParser().getResult();
     const ua: UAData = {
@@ -110,9 +90,8 @@ export default function AnalyticsTracker() {
       browser: result.browser.name ?? "Other",
     };
     uaRef.current = ua;
-    const ip = await getUserIp();
     const current = pathnameRef.current;
-    if (!SKIP.some((r) => current.startsWith(r))) sendAnalytics(current, ua, ip);
+    if (!SKIP.some((r) => current.startsWith(r))) sendAnalytics(current, ua);
   }
 
   if (IS_DEV) return null;

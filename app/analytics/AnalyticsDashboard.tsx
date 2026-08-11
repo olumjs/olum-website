@@ -21,6 +21,22 @@ interface RecentVisit {
   referrer?: string;
 }
 
+// One usage ping from the Olum CLI — see app/api/telemetry/route.ts.
+interface TelemetryEvent {
+  key: string;
+  cliVersion: string;
+  olumVersion: string;
+  nodeMajor: number;
+  os: string;
+  timestamp: string;
+  ts: number;
+}
+
+interface TelemetryData {
+  events?: TelemetryEvent[];
+  lastReceived?: string | null;
+}
+
 interface AnalyticsData {
   totalVisits?: number;
   visitors?: number;
@@ -78,6 +94,20 @@ function relativeTime(ts: number): string {
 
 function sumRecord(rec?: Record<string, number>): number {
   return Object.values(rec ?? {}).reduce((a, b) => a + b, 0);
+}
+
+// Telemetry reuses the analytics password — both endpoints are guarded by the
+// same SECRET. Kept separate from the analytics fetch so a telemetry failure
+// (or an empty log) never blocks the rest of the dashboard from rendering.
+async function fetchTelemetry(pw: string): Promise<TelemetryData | null> {
+  const url = pw ? `/api/telemetry?secret=${encodeURIComponent(pw)}` : "/api/telemetry";
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    return json.ok ? (json.data as TelemetryData) : null;
+  } catch {
+    return null;
+  }
 }
 
 // Heuristic bot detection. A headless browser is a near-certain signal — no real
@@ -351,6 +381,7 @@ export default function AnalyticsDashboard() {
   const [initDone, setInitDone] = useState(false);
   const [storedPw, setStoredPw] = useState("");
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearMsg, setClearMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -373,6 +404,7 @@ export default function AnalyticsDashboard() {
           setData(json.data as AnalyticsData);
           setAuthed(true);
           setLastUpdated(new Date());
+          fetchTelemetry(saved).then(setTelemetry);
         } else if (saved) {
           sessionStorage.removeItem("a_tk");
         }
@@ -386,12 +418,13 @@ export default function AnalyticsDashboard() {
     setRefreshing(true);
     try {
       const url = pw ? `/api/analytics?secret=${encodeURIComponent(pw)}` : "/api/analytics";
-      const res = await fetch(url);
+      const [res, freshTelemetry] = await Promise.all([fetch(url), fetchTelemetry(pw)]);
       const json = await res.json();
       if (json.ok) {
         setData(json.data as AnalyticsData);
         setLastUpdated(new Date());
       }
+      if (freshTelemetry) setTelemetry(freshTelemetry);
     } finally {
       setRefreshing(false);
     }
@@ -425,6 +458,7 @@ export default function AnalyticsDashboard() {
     setAuthed(true);
     setLastUpdated(new Date());
     setInitDone(true);
+    fetchTelemetry(pw).then(setTelemetry);
   };
 
   const activeData = useMemo<AnalyticsData | null>(() => {
@@ -446,6 +480,30 @@ export default function AnalyticsDashboard() {
     }
     return counts;
   }, [activeData]);
+
+  // Telemetry honours the same date range as the visit data, so both halves of
+  // the dashboard always describe the same period.
+  const telemetryEvents = useMemo<TelemetryEvent[]>(() => {
+    const events = telemetry?.events ?? [];
+    const since = getRangeStart(dateRange);
+    return since ? events.filter((e) => e.ts >= since) : events;
+  }, [telemetry, dateRange]);
+
+  const telemetryBreakdown = useMemo(() => {
+    const cliVersions: Record<string, number> = {};
+    const olumVersions: Record<string, number> = {};
+    const nodeVersions: Record<string, number> = {};
+    const osCounts: Record<string, number> = {};
+
+    for (const e of telemetryEvents) {
+      cliVersions[e.cliVersion] = (cliVersions[e.cliVersion] ?? 0) + 1;
+      olumVersions[e.olumVersion] = (olumVersions[e.olumVersion] ?? 0) + 1;
+      nodeVersions[`node ${e.nodeMajor}`] = (nodeVersions[`node ${e.nodeMajor}`] ?? 0) + 1;
+      osCounts[e.os] = (osCounts[e.os] ?? 0) + 1;
+    }
+
+    return { cliVersions, olumVersions, nodeVersions, osCounts };
+  }, [telemetryEvents]);
 
   // Visits to show in the table — every visit, minus bots when that filter is on.
   const visibleVisits = useMemo<RecentVisit[]>(() => {
@@ -805,6 +863,145 @@ export default function AnalyticsDashboard() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* ── Olum CLI telemetry ── */}
+      <div className="mt-12">
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-[var(--fg)] font-bold text-lg tracking-tight">Olum Users</h2>
+          <Hint
+            content={
+              <div className="flex flex-col gap-2 py-0.5 text-left leading-[1.5]">
+                <div>
+                  Anonymous pings sent by the Olum CLI. Each row is one ping, not one person —
+                  no identifier is stored, so the same machine reporting twice counts twice.
+                </div>
+                <div className="opacity-80">
+                  Treat the total as usage volume, not a headcount.
+                </div>
+              </div>
+            }
+          >
+            <button
+              type="button"
+              aria-label="What does this section count?"
+              className="shrink-0 p-1 rounded-md text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)] transition-colors cursor-help"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" />
+              </svg>
+            </button>
+          </Hint>
+        </div>
+
+        <div className="flex gap-3 flex-wrap mb-5">
+          <StatCard
+            label="Total Pings"
+            value={telemetryEvents.length.toLocaleString()}
+            sub="CLI reports"
+          />
+          <StatCard
+            label="Top CLI"
+            value={topEntry(telemetryBreakdown.cliVersions)[0]}
+            sub={`${topEntry(telemetryBreakdown.cliVersions)[1] || 0} pings`}
+            valueClassName="text-[.95rem] break-all"
+          />
+          <StatCard
+            label="Top Olum"
+            value={topEntry(telemetryBreakdown.olumVersions)[0]}
+            sub={`${topEntry(telemetryBreakdown.olumVersions)[1] || 0} pings`}
+            valueClassName="text-[.95rem] break-all"
+          />
+          <StatCard
+            label="Top Node"
+            value={topEntry(telemetryBreakdown.nodeVersions)[0]}
+            sub={`${topEntry(telemetryBreakdown.nodeVersions)[1] || 0} pings`}
+            valueClassName="text-[.95rem] break-all"
+          />
+          <StatCard
+            label="Top OS"
+            value={topEntry(telemetryBreakdown.osCounts)[0]}
+            sub={`${topEntry(telemetryBreakdown.osCounts)[1] || 0} pings`}
+            valueClassName="text-[.95rem] break-all capitalize"
+          />
+        </div>
+
+        <div className={`${CARD} overflow-hidden`}>
+          <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap">
+            <p className={SEC_LBL}>Recent Pings</p>
+            <div className="flex items-center gap-3">
+              {!!telemetryEvents.length && (
+                <span className="font-mono text-[11px] text-[var(--fg-muted)] shrink-0">
+                  {telemetryEvents.length} entries
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  {["CLI Version", "Olum Version", "Node", "OS", "Reported", "Received"].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)] whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {!telemetryEvents.length ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-10 text-center font-mono text-xs text-[var(--fg-muted)] opacity-40"
+                    >
+                      No CLI pings recorded yet
+                    </td>
+                  </tr>
+                ) : (
+                  telemetryEvents.map((e) => (
+                    <tr
+                      key={e.key}
+                      className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"
+                    >
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg)] whitespace-nowrap">
+                        {e.cliVersion}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                        {e.olumVersion}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                        {e.nodeMajor}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap capitalize">
+                        {e.os}
+                      </td>
+                      {/* Reported = the clock on the user's machine; Received = ours. They
+                          disagree when a machine's clock is wrong, which is worth seeing. */}
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
+                        <span title={e.timestamp}>
+                          {new Date(e.timestamp).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
+                        {relativeTime(e.ts)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

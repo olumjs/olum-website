@@ -156,16 +156,14 @@ const ecosystem = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <rect x="3" y="3" width="7" height="7" rx="1.5" />
-        <rect x="14" y="3" width="7" height="7" rx="1.5" />
-        <rect x="3" y="14" width="7" height="7" rx="1.5" />
-        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        <polyline points="4 17 10 11 4 5" />
+        <line x1="12" y1="19" x2="20" y2="19" />
       </svg>
     ),
-    name: "Olum Icons",
+    name: "Sandbox",
     tag: "official",
-    description: "A framework-agnostic icon library — plain SVG strings from Lucide, Heroicons, and Font Awesome.",
-    links: [{ label: "icons.olumjs.top", href: "https://icons.olumjs.top" }],
+    description: "An in-browser playground — write Olum components and see them run live, no setup required.",
+    links: [{ label: "sandbox.olumjs.top", href: "https://code.olumjs.top" }],
     accent: "#25C97E",
   },
   {

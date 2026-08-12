@@ -10,8 +10,15 @@ const TELEMETRY_COL = "olum-telemetry";
 // plenty of headroom for real use while capping what a single source can write.
 const RATE_LIMIT = { path: `${TELEMETRY_COL}/limits`, limit: 30, windowMs: 10 * 60 * 1000 };
 
-const OS_VALUES = ["linux", "macos", "windows"] as const;
-type OS = (typeof OS_VALUES)[number];
+// Node's `process.platform` names two of these differently from how anyone reads
+// them. Every other platform (freebsd, openbsd, sunos, aix, android…) already
+// reports a sensible name, so it is kept as sent rather than enumerated here —
+// a new platform should not need a deploy to be counted.
+const OS_ALIASES: Record<string, string> = { darwin: "macos", win32: "windows" };
+
+// Free-form values that end up as dashboard labels. Constrained to a short slug
+// so a malformed or hostile client can't write junk into the log.
+const SLUG = /^[a-z0-9][a-z0-9._-]{0,23}$/;
 
 // Versions are free-form (semver, prereleases, git tags), so we only guard
 // against junk being written into the database rather than parsing them.
@@ -24,19 +31,54 @@ function parseVersion(value: unknown): string | null {
   return trimmed;
 }
 
-// Accepts a number (22), a plain string ("22") or a full version ("v22.14.0"),
-// since callers read this from `process.versions.node` in different ways.
-function parseNodeMajor(value: unknown): number | null {
-  const raw = typeof value === "number" ? String(value) : typeof value === "string" ? value : "";
-  const major = Number.parseInt(raw.replace(/^v/, ""), 10);
-  if (!Number.isInteger(major) || major < 1 || major > 999) return null;
-  return major;
-}
-
-function parseOS(value: unknown): OS | null {
+function parseOS(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const os = value.trim().toLowerCase();
-  return (OS_VALUES as readonly string[]).includes(os) ? (os as OS) : null;
+  const named = OS_ALIASES[os] ?? os;
+  return SLUG.test(named) ? named : null;
+}
+
+// Which command produced the ping — "create", "add", and whatever comes next.
+// Optional, so pings from CLI versions predating this field still record.
+function parseType(value: unknown): string {
+  if (typeof value !== "string") return "unknown";
+  const type = value.trim().toLowerCase();
+  return SLUG.test(type) ? type : "unknown";
+}
+
+// The argument the command was given. Only recorded for commands whose argument
+// names something of ours — an olum-ui component for `add`. A `create` argument is
+// the user's own project name, which can identify a person or an unreleased product,
+// so it is dropped here as well as in the CLI: enforcing it at the point of storage
+// means no client, old or modified, can put one in the log.
+const NAMELESS_TYPES = ["create"];
+const MAX_NAME_LEN = 64;
+
+function parseName(value: unknown, type: string): string | null {
+  if (NAMELESS_TYPES.includes(type)) return null;
+  if (typeof value !== "string") return null;
+  // charCode filter rather than a regex, so no control-character escape is needed
+  const printable = Array.from(value)
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join("");
+  return printable.trim().slice(0, MAX_NAME_LEN) || null;
+}
+
+// Flags the command ran with, e.g. ["tailwind"]. Deduped and capped so a caller
+// can't pad a ping with hundreds of entries.
+const MAX_OPTIONS = 10;
+
+function parseOptions(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const flags = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => SLUG.test(item));
+  const unique = Array.from(new Set(flags)).slice(0, MAX_OPTIONS);
+  return unique.length ? unique : null;
 }
 
 // Client clocks can be wrong or absent — fall back to server time so every
@@ -105,7 +147,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid body" }, { status: 400 });
   }
 
-  const { cliVersion, olumVersion, nodeMajor, os, timestamp } = body as Record<string, unknown>;
+  const { cliVersion, olumVersion, compilerVersion, nodeVersion, nodeMajor, os, type, name, options, timestamp } =
+    body as Record<string, unknown>;
 
   const cli = parseVersion(cliVersion);
   if (!cli) {
@@ -117,18 +160,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "olumVersion required" }, { status: 400 });
   }
 
-  const node = parseNodeMajor(nodeMajor);
-  if (node === null) {
-    return NextResponse.json({ ok: false, error: "nodeMajor required" }, { status: 400 });
-  }
-
   const platform = parseOS(os);
   if (!platform) {
     return NextResponse.json(
-      { ok: false, error: `os must be one of: ${OS_VALUES.join(", ")}` },
+      { ok: false, error: "os required (lowercase platform name, max 24 chars)" },
       { status: 400 },
     );
   }
+
+  const command = parseType(type);
+  const label = parseName(name, command);
+  const flags = parseOptions(options);
 
   try {
     await db.ref(TELEMETRY_COL).update({ lastReceived: new Date().toISOString() });
@@ -136,10 +178,22 @@ export async function POST(req: NextRequest) {
     await db.ref(`${TELEMETRY_COL}/events`).push({
       cliVersion: cli,
       olumVersion: olum,
-      nodeMajor: node,
+      // stored exactly as the CLI reported it — the full runtime version, e.g.
+      // "24.15.0". Deliberately not parsed or format-checked, so an unusual build
+      // (nightly, rc, a vendor fork) records as-is instead of being rejected.
+      // `nodeMajor` is the key CLIs used before the rename; `null` when neither is
+      // present, since the database refuses an undefined value.
+      nodeVersion: nodeVersion ?? nodeMajor ?? null,
+      // the app's olum-compiler, resolved the same way as olumVersion. Optional:
+      // older CLIs don't send it, and an app may not have the compiler installed
+      compilerVersion: parseVersion(compilerVersion) ?? "unknown",
       os: platform,
+      type: command,
       timestamp: parseTimestamp(timestamp),
       ts: Date.now(),
+      // both optional: older CLIs don't send them, and `add` has no flags
+      ...(label ? { name: label } : {}),
+      ...(flags ? { options: flags } : {}),
     });
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });

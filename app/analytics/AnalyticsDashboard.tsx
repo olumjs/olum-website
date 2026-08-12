@@ -26,11 +26,30 @@ interface TelemetryEvent {
   key: string;
   cliVersion: string;
   olumVersion: string;
-  nodeMajor: number;
+  // the app's olum-compiler version; absent on pings from CLIs that predate the field
+  compilerVersion?: string;
+  // the full runtime version as the CLI reported it, "24.15.0". Stored unvalidated,
+  // and older pings carry a bare major as a number, so the shape isn't guaranteed
+  nodeVersion?: string | number;
   os: string;
+  // absent on pings from CLI versions that predate the field
+  type?: string;
+  // the command's argument, `add` only — an olum-ui component. `create` project
+  // names are the user's own wording and are deliberately never collected
+  name?: string;
+  // flags the command ran with, `create` only
+  options?: string[];
   timestamp: string;
   ts: number;
 }
+
+// What each command means in the Olum Users table, for readers who don't think
+// in CLI verbs. Anything not listed shows as-is.
+const TELEMETRY_TYPES: Record<string, string> = {
+  create: "Project scaffolded with olum create",
+  add: "olum-ui component installed with olum add",
+  unknown: "Sent by a CLI version that predates the type field.",
+};
 
 interface TelemetryData {
   events?: TelemetryEvent[];
@@ -90,6 +109,10 @@ function relativeTime(ts: number): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function isDef(value: unknown): boolean {
+  return value !== undefined && value !== null;
 }
 
 function sumRecord(rec?: Record<string, number>): number {
@@ -203,11 +226,15 @@ function BarChart({
   labelFn,
   descFn,
   maxItems = 8,
+  total,
 }: {
   data?: Record<string, number>;
   labelFn?: (key: string) => string;
   descFn?: (key: string) => string | undefined;
   maxItems?: number;
+  // when set, each row also shows its share of this figure. It is deliberately not
+  // the sum of the bars: a flag's share is out of every run that could have used it
+  total?: number;
 }) {
   const entries = Object.entries(data ?? {})
     .filter(([, v]) => v > 0)
@@ -254,6 +281,14 @@ function BarChart({
             <span className="font-mono text-[11px] text-[var(--fg-muted)] tabular-nums shrink-0 w-8 text-right">
               {value}
             </span>
+            {!!total && total > 0 && (
+              <span
+                className="font-mono text-[11px] text-[var(--fg-muted)] opacity-60 tabular-nums shrink-0 w-12 text-right"
+                title={`${value} of ${total}`}
+              >
+                ({Math.round((value / total) * 100)}%)
+              </span>
+            )}
           </div>
         );
       })}
@@ -492,17 +527,48 @@ export default function AnalyticsDashboard() {
   const telemetryBreakdown = useMemo(() => {
     const cliVersions: Record<string, number> = {};
     const olumVersions: Record<string, number> = {};
+    const compilerVersions: Record<string, number> = {};
     const nodeVersions: Record<string, number> = {};
     const osCounts: Record<string, number> = {};
+    const typeCounts: Record<string, number> = {};
+    // only `add` carries a name — it's an olum-ui component. Project names are
+    // deliberately not collected, so `create` contributes its count and nothing else
+    const components: Record<string, number> = {};
+    const optionCounts: Record<string, number> = {};
+    let optionsUsed = 0;
 
     for (const e of telemetryEvents) {
       cliVersions[e.cliVersion] = (cliVersions[e.cliVersion] ?? 0) + 1;
       olumVersions[e.olumVersion] = (olumVersions[e.olumVersion] ?? 0) + 1;
-      nodeVersions[`node ${e.nodeMajor}`] = (nodeVersions[`node ${e.nodeMajor}`] ?? 0) + 1;
+      const compiler = e.compilerVersion ?? "unknown";
+      compilerVersions[compiler] = (compilerVersions[compiler] ?? 0) + 1;
+      nodeVersions[`node ${e.nodeVersion}`] = (nodeVersions[`node ${e.nodeVersion}`] ?? 0) + 1;
       osCounts[e.os] = (osCounts[e.os] ?? 0) + 1;
+      const type = e.type ?? "unknown";
+      typeCounts[type] = (typeCounts[type] ?? 0) + 1;
+
+      if (e.name && type === "add") components[e.name] = (components[e.name] ?? 0) + 1;
+
+      for (const flag of e.options ?? []) {
+        optionCounts[flag] = (optionCounts[flag] ?? 0) + 1;
+        optionsUsed++;
+      }
     }
 
-    return { cliVersions, olumVersions, nodeVersions, osCounts };
+    return {
+      cliVersions,
+      olumVersions,
+      compilerVersions,
+      nodeVersions,
+      osCounts,
+      typeCounts,
+      components,
+      optionCounts,
+      optionsUsed,
+      // pings, not people — the same machine running the command twice counts twice
+      projectsCreated: typeCounts.create ?? 0,
+      componentsAdded: Object.values(components).reduce((a, b) => a + b, 0),
+    };
   }, [telemetryEvents]);
 
   // Visits to show in the table — every visit, minus bots when that filter is on.
@@ -895,6 +961,29 @@ export default function AnalyticsDashboard() {
           </Hint>
         </div>
 
+        {/* the three headline numbers: projects scaffolded, flags used, components installed */}
+        <div className="flex gap-3 flex-wrap mb-3">
+          <StatCard
+            label="Projects Created"
+            value={telemetryBreakdown.projectsCreated.toLocaleString()}
+            sub="olum create runs"
+          />
+          <StatCard
+            label="Options Used"
+            value={telemetryBreakdown.optionsUsed.toLocaleString()}
+            sub={`${Object.keys(telemetryBreakdown.optionCounts).length} distinct flag${
+              Object.keys(telemetryBreakdown.optionCounts).length === 1 ? "" : "s"
+            }`}
+          />
+          <StatCard
+            label="Components Added"
+            value={telemetryBreakdown.componentsAdded.toLocaleString()}
+            sub={`${Object.keys(telemetryBreakdown.components).length} distinct component${
+              Object.keys(telemetryBreakdown.components).length === 1 ? "" : "s"
+            }`}
+          />
+        </div>
+
         <div className="flex gap-3 flex-wrap mb-5">
           <StatCard
             label="Total Pings"
@@ -914,6 +1003,12 @@ export default function AnalyticsDashboard() {
             valueClassName="text-[.95rem] break-all"
           />
           <StatCard
+            label="Top Compiler"
+            value={topEntry(telemetryBreakdown.compilerVersions)[0]}
+            sub={`${topEntry(telemetryBreakdown.compilerVersions)[1] || 0} pings`}
+            valueClassName="text-[.95rem] break-all"
+          />
+          <StatCard
             label="Top Node"
             value={topEntry(telemetryBreakdown.nodeVersions)[0]}
             sub={`${topEntry(telemetryBreakdown.nodeVersions)[1] || 0} pings`}
@@ -926,6 +1021,30 @@ export default function AnalyticsDashboard() {
             valueClassName="text-[.95rem] break-all capitalize"
           />
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <Panel title="Commands">
+            <BarChart data={telemetryBreakdown.typeCounts} descFn={(k) => TELEMETRY_TYPES[k]} />
+          </Panel>
+          <Panel title="Operating Systems">
+            <BarChart data={telemetryBreakdown.osCounts} />
+          </Panel>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <Panel title="Components Added">
+            <BarChart data={telemetryBreakdown.components} maxItems={10} />
+          </Panel>
+          <Panel title="Create Options">
+            {/* share of every `create` run that passed the flag, not of all flags used */}
+            <BarChart
+              data={telemetryBreakdown.optionCounts}
+              labelFn={(k) => `--${k}`}
+              total={telemetryBreakdown.projectsCreated}
+            />
+          </Panel>
+        </div>
+
 
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap">
@@ -943,7 +1062,7 @@ export default function AnalyticsDashboard() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  {["CLI Version", "Olum Version", "Node", "OS", "Reported", "Received"].map((h) => (
+                  {["Command", "Name", "Options", "CLI Version", "Olum Version", "Compiler", "Node", "OS", "Reported", "Received"].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)] whitespace-nowrap"
@@ -957,7 +1076,7 @@ export default function AnalyticsDashboard() {
                 {!telemetryEvents.length ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={10}
                       className="px-4 py-10 text-center font-mono text-xs text-[var(--fg-muted)] opacity-40"
                     >
                       No CLI pings recorded yet
@@ -969,14 +1088,37 @@ export default function AnalyticsDashboard() {
                       key={e.key}
                       className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"
                     >
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg)] whitespace-nowrap">
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        <span
+                          className="font-mono text-[11px] rounded-md px-2 py-1 bg-[var(--surface-hover)] text-[var(--fg-secondary)]"
+                          title={TELEMETRY_TYPES[e.type ?? "unknown"]}
+                        >
+                          {e.type ?? "unknown"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg)] max-w-[160px]">
+                        {e.name
+                          ? <span className="block truncate" title={e.name}>{e.name}</span>
+                          : <span className="opacity-30">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
+                        {e.options?.length
+                          ? e.options.map((flag) => `--${flag}`).join(" ")
+                          : <span className="opacity-30">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
                         {e.cliVersion}
                       </td>
                       <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
                         {e.olumVersion}
                       </td>
                       <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
-                        {e.nodeMajor}
+                        {e.compilerVersion ?? <span className="opacity-30">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                        {/* stringified: the value is stored unvalidated, and a
+                            non-primitive would otherwise crash the render */}
+                        {isDef(e.nodeVersion) ? String(e.nodeVersion) : <span className="opacity-30">—</span>}
                       </td>
                       <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap capitalize">
                         {e.os}

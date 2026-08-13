@@ -41,7 +41,11 @@ src/
 ### Static assets
 Files in `public/` are served at the site root. **Always reference with root-absolute URLs starting with `/`**
 (templates AND `<style>`): `/assets/logo.svg`, never `assets/logo.svg` (relative resolves against the
-current route and 404s in production). `public/index.html` is the app shell; `public/main.css` is the global stylesheet.
+current route and 404s in production, because templates/styles are injected at runtime and resolve against
+the CURRENT route). The dev server is forgiving here (it strips route segments until a file matches), so a
+relative URL *appears* to work in dev — don't trust it. Interpolation composes paths fine, keep the leading
+slash: `<span style="background-image: url(/assets/{type}.svg)">`. `public/index.html` is the app shell;
+`public/main.css` is the global stylesheet.
 
 ---
 
@@ -130,7 +134,7 @@ Native `on*` attributes hold **code** (like real HTML). Two forms:
 ```
 
 - **No event modifiers.** Do it in the handler: `onsubmit="(e)=> { e.preventDefault(); save() }"`.
-- **One `on*` attribute per element.** For a second listener, attach it imperatively in `onMount` (see below).
+- **Several `on*` attributes per element are fine** — each is wired as its own listener (`<input oninput="draft($event)" onblur="save()" />`). Use `onMount` only for listeners on `window`/`document` or ones needing `capture`/`passive`.
 - Inside `<for>`, handlers can reference loop variables directly: `<button onclick="remove(item)">`.
 - On a **component** tag, any `on*` name is a function prop, NOT a DOM event.
 
@@ -152,6 +156,8 @@ Content nodes are never replaced, so a playing `<video>`, animation, or typed in
 ```html
 <show when="state.visible"><div class="panel">…</div></show>
 ```
+It compiles to one stable wrapper `<div data-o-show>` present in **both** states, so parent CSS with a direct-child
+combinator through it (`.parent > .panel`) won't match — target `[data-o-show] > .panel` or drop the `>`.
 Don't wrap `<tr>`/`<option>` in `<show>` (its wrapper `<div>` is invalid there) — use `<if>` instead.
 
 ## Loops — `<for>`
@@ -172,6 +178,9 @@ Index + array params (like `Array.map`), wrap in parens:
 <for each="todo of state.todos" key="todo.id"><TodoRow todo="{todo}" /></for>
 <for each="todo of state.todos" key="todo.id"><li>{todo.text}</li></for>
 ```
+`key` on `<for>` keys both component loops (the instance is reused) and plain-element loops (the repeated root is reused);
+it applies to the loop's **direct root only** — inner children are never keyed. `key="{item.id}"` directly on a plain
+element does the same thing.
 Dynamic count range: `each="i of Array.from({ length: state.n }, (_, k) => k + 1)"` (a literal number is required for the `of N` form).
 
 ---
@@ -194,7 +203,17 @@ Declare reactive state as a **literal top-level `const state = { ... }`**. Mutat
 - Non-plain objects (`Date`, DOM nodes, class instances) are NOT tracked — assign back to a top-level key to re-render.
 - Re-assigning the **same reference** (`state.todos = state.todos`) is a no-op. Force a re-render with a fresh value (spread, `map`, `filter`, `slice`).
 - `const state = makeState()` is NOT recognized — must be a literal object in the component.
-- Re-renders **diff-patch the DOM in place** (untouched nodes survive: focus, caret, scroll, playing media). Re-renders are **microtask-batched** (many writes → one patch). In tests, `window.olum.flushUpdates()` settles pending re-renders synchronously.
+
+### Rendering & updates (there is no render function — writing to state/store IS the API)
+
+1. A write emits (deep mutations included) → 2. dirty components are **batched per microtask** (`state.a++; state.b++`, or a `splice` shifting 100 rows = ONE pass) → 3. the template renders into a **detached** tree → 4. the patcher diffs it against the live DOM and mutates only what changed.
+
+- **Untouched nodes survive**, and with them everything the browser owns: focus, caret/selection, scroll, playing `<video>`/`<audio>`, running CSS animations, iframes, canvas, uncontrolled input values. Event listeners are kept unless their binding (or a value baked into it, e.g. a loop variable) changed.
+- **Only what needs to render, renders.** A write to a state key the **template never reads** doesn't schedule a render at all (so a key used only in handlers/`onMount` is free). Store subscriptions come from *reading* the store during render. If a parent and its child are both dirty in the same tick, only the parent renders (its pass rebuilds the child). Updates for components that left the DOM are discarded.
+- **Identity:** component instances have their own; plain elements opt in with `key`. Keyed nodes are **moved** (`moveBefore` where supported), not re-created; unkeyed children are matched positionally with a short insertion/deletion lookahead. A bigger unkeyed reshuffle repaints nodes with a neighbour's data — add `key`.
+- **Form controls are never clobbered:** `value`/`checked` are written to a live input only when the **template's** value changed, and the caret is preserved when they are; a `<select>` keeps the user's choice unless the template moves the `selected` option.
+- `window.olum.flushUpdates()` settles pending re-renders synchronously (idempotent; mostly for tests / imperative DOM reads right after a write).
+- If a patch throws, olum logs `patch failed — falling back to full re-render` and rebuilds that component's content (correct, but browser state resets) — that warning is a bug worth reporting.
 
 ### Derived values = plain functions (no "computed")
 ```html
@@ -263,7 +282,7 @@ Destructuring from `props()` is a **compiler feature**: each destructured name c
   const inc = () => onChange(value + 1);
 </script>
 ```
-Assigning to a destructured prop throws (`const`); never mutate props. On a **component** tag, `on*` names (even `onclick`) are just function props the child chooses when to call.
+Assigning to a destructured prop throws (`const`); never mutate props. On a **component** tag, `on*` names (even `onclick`) are just function props the child chooses when to call. A function prop resolves against the component whose template **authored** the tag, so it still arrives when the tag is written inside another component's slot (`<Section><Card onPick="{pick}" /></Section>`).
 
 ---
 
@@ -288,7 +307,8 @@ Top-level props and methods are **private by default**. Scope attributes on the 
 ```html
 <script public-props exclude-age private-methods exclude-get-age>…</script>
 ```
-Read a **mounted** component's public surface with `scope("Name"[, index])` from `olum` → `{ props, methods, state, el, key }` (or `null`). Escape hatch — prefer the store for shared state.
+What counts: **props** = top-level `const`s with a simple initializer (literal, object, array, ternary, another name); **methods** = top-level function declarations or `const fn = () => …`. Anything else (`const x = compute()`) still works but isn't exposed. Reactive `state` is governed by the **props** scope (`exclude-state` keeps it private under a public-props group).
+Read a **mounted** component's public surface with `scope("Name"[, index])` from `olum` → `{ props, methods, state, el, key }` (`state` is the live proxy — writing to it re-renders that component; returns `null` + a console warning if nothing matches). Escape hatch — prefer the store for shared state.
 
 ---
 
@@ -358,7 +378,9 @@ A component's `<style>` is auto-scoped (compiler tags elements with a unique att
   :root { --brand: #25c97e; }        /* :root / html / body selectors stay GLOBAL (escape hatch) */
 </style>
 ```
-- `@keyframes` are renamed per-component (no collisions); `@media/@supports/@layer/@container` inner rules are scoped; `@font-face` untouched.
+- Scoping attaches to the selector's **last compound** (`p:hover` → `p[data-o-x]:hover`), so `.card p` never reaches into a nested component's elements (they carry their own scope attribute).
+- `@keyframes` are renamed per-component (no collisions); `@media/@supports/@layer/@container` inner rules are scoped; `@font-face` untouched; CSS comments are stripped.
+- Styles are injected **once per component** into `<style id="olum-style-<Name>">` in `<head>`, the first time any instance renders; every instance shares it.
 - `url(...)` in component CSS must be root-absolute (`url(/assets/x.svg)`).
 - No `:host` selector — style your template elements directly. App-wide styles go in `public/main.css`.
 
@@ -375,11 +397,12 @@ Wrap **one element** to animate its enter/leave. Intro plays when it enters (`<i
 ```
 - Attributes: `transition="fn(params)"` (both), `in="fn(params)"`, `out="fn(params)"`. `params` is a normal object evaluated at render time (can read `state` / loop vars).
 - **Built-ins** (no import): `fade`, `fly` (x,y,opacity), `scale` (start,opacity), `slide` (height), `draw` (SVG path). All take `delay`, `duration`, and `easing` (a **name string**, e.g. `'quintOut'`, `'bounceInOut'`; full set on `olum.easings`).
-- **Custom:** a function `(node, params) => ({ delay?, duration?, easing?, css?(t,u), tick?(t,u) })` — same contract as Svelte. `t` 0→1 on enter, 1→0 on leave; `u = 1 - t`. Define in `<script>` and name it. Params are JSON-serialized (can't pass a function as a param).
+- **Custom:** a function `(node, params) => ({ delay?, duration?, easing?, css?(t,u), tick?(t,u) })` — same contract as Svelte. `t` 0→1 on enter, 1→0 on leave; `u = 1 - t`. Define in `<script>` and name it (a local fn of the same name wins over a built-in). Params are JSON-serialized (can't pass a function as a param — bake a custom easing in, or pass a built-in easing's **name**). Prefer `css` (cheap; the element's styling is restored when it ends); use `tick` only for what styles can't express (rewriting text, driving a canvas) — `tick` owns what it touches and is NOT unwound, so land it on the final state at `t = 1` / `t = 0`.
 - **Lifecycle events:** `onintrostart` / `onintroend` / `onoutrostart` / `onoutroend` = bare method names.
 - **Keyed lists:** works on items inside a keyed `<for>` (each plays its in/out as items add/remove).
 - **`flip`** attribute: animates keyed items to their new position on reorder (needs a keyed `<for>`). Takes `duration`, `delay`, `easing` (name).
-- **`crossfade()`** from `olum` returns `[send, receive]`; put `out="send({ key })"` on the leaving element and `in="receive({ key })"` on the entering one with the same key to fly between two spots. Wrap as named consts (it's destructured). Key off a **primitive id**, not an object.
+- **`crossfade({ duration?, easing?, fallback? })`** from `olum` returns `[send, receive]`; put `out="send({ key })"` on the leaving element and `in="receive({ key })"` on the entering one with the same key to fly between two spots (no partner → `fallback` plays). Wrap as named consts (it's destructured): `const _cf = crossfade({ fallback: transitions.scale }); const send = (n, p) => _cf[0](n, p);`. Composes with `flip`. Key off a **primitive id**, not an object.
+- If an element is dropped and re-added before its outro finishes, the outro is cancelled and it eases back in. Animations run on `requestAnimationFrame`, so they **pause in a background tab**.
 
 ---
 
@@ -388,14 +411,15 @@ Wrap **one element** to animate its enter/leave. Intro plays when it enters (`<i
 Compiles to `console.log(expr)` that runs on initial render + whenever the logged value changes; renders nothing.
 ```html
 <log>{state.user}</log>
-<log>{state.a, state.b}</log>   <!-- multiple args pass through -->
+<log>{state.a, state.b}</log>   <!-- multiple comma-separated args pass through -->
 ```
+It re-fires only when a state key it reads changes (same dependency gating as re-renders), so `<log>{state.x}</log>` is silent when `state.y` changes. For a condition-based break instead, put `debugger;` in a `watcher`.
 
 ---
 
 ## Router (olum-router)
 
-File-based (see Project structure). No route config — the file tree IS the route table. History mode by default (clean URLs); falls back to hash mode if the History API is missing.
+File-based (see Project structure), via the separate `olum-router` package (`npm i olum-router`; already in the starter template). No route config — the file tree IS the route table. History mode by default (clean URLs); falls back to hash mode if the History API is missing.
 
 **Links — `to` attribute** (client-side navigation, no reload):
 ```html
@@ -423,7 +447,7 @@ pathname();           // current route path (normalized, leading slash, no trail
 ```
 Multiple dynamic segments work (`/users/[id]/posts/[postId]`). Static route wins over dynamic. No catch-all.
 
-**404:** add `not-found.html` at the root of `src/`.
+**404:** add `not-found.html` at the root of `src/`; without it an unmatched URL renders a plain `Page Not Found!` in the app root.
 
 **Opting out / manual entry** — write `src/main.js` yourself and the compiler skips router generation:
 ```js title="src/main.js"
@@ -456,7 +480,8 @@ export const cart = store({
 <button onclick="cart.clear()">Empty</button>
 ```
 - Same **deep reactivity** as `state` (nested objects/arrays/Map/Set). Non-plain objects untracked. Same-reference/no-change writes are skipped.
-- **Writes are microtask-batched** — many writes in a tick paint once. Component `state` batches the same way, so the store is **not** faster for large collections; choose it because the data is **shared**, not for performance. DOM isn't updated immediately after a write (`await Promise.resolve()` to read it).
+- Subscriptions need no cleanup: a subscriber that left the DOM is dropped on the next store change, and when a parent and its child both read the same store only the **parent** re-renders.
+- **Writes are microtask-batched** — many writes in a tick paint once. Component `state` batches the same way, so the store is **not** faster for large collections; choose it because the data is **shared**, not for performance. DOM isn't updated immediately after a write — a store write settles in TWO hops (one microtask notifies subscribers, the next re-renders them), so read it with `await Promise.resolve(); window.olum.flushUpdates();`.
 - Mutating from outside an action works (`cart.items = []` in a handler). Split by concern (`cart.js`, `session.js`). `store(init)` takes a plain object (no class instances). `olum` auto-loads `olum-store`.
 
 ### state vs props vs store
@@ -469,7 +494,7 @@ export const cart = store({
 
 ## Build & Deploy
 
-`npm run build` compiles every component, bundles with vite, writes static output to `dist/`. Compile errors fail the build (non-zero exit). Everything in `public/` is included. Host `dist/` anywhere static, but configure an **SPA fallback** to `index.html` (history mode):
+`npm run build` compiles every component, bundles with vite (installed into the project on the first build), and writes static output to `dist/` (`index.html` + hashed `assets/`: your JS, `main.css` plus every component style, and everything from `public/assets`). Compile errors fail the build (non-zero exit, no bundle). Files referenced only from runtime strings (`url(/assets/{type}.svg)`) are copied as-is. Host `dist/` anywhere static, but configure an **SPA fallback** to `index.html` (history mode — the router can't detect a missing rewrite):
 ```
 Netlify  public/_redirects:  /*  /index.html  200
 Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
@@ -495,7 +520,6 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 | `bind:this` / element refs | `host.querySelector(…)` in `onMount` | no refs |
 | `use:action` | wire up in `onMount`, clean up in its return | no action directive |
 | `each="i of state.n"` | `each="i of Array.from({length: state.n}, (_,k)=>k+1)"` | numeric range needs a literal number |
-| two `on*` on one element | one handler; extra listeners via `onMount` | one `on*` per element |
 | two `onMount(…)` calls | one call, one combined cleanup | only the first is wired |
 | `params()` / `props()` twice | destructure once at top level | only the first call is compiled |
 | `const { a, ...rest } = props()` | read extras via `props()` | `rest` is a snapshot, not live |
@@ -510,6 +534,8 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 
 - **Hybrid compiler passes** — templates parse through a real HTML AST (parse5) and component JS through a real JS AST (acorn), but interpolation/codegen still involve regex passes over serialized markup; robust for common cases, fragile at some edges.
 - **Global reactivity bus** — broadcast dispatch, O(N) per update.
+- **Unkeyed `<for>` reorders match by position** — nodes are repainted with a neighbour's data instead of moving. Add `key`.
+- **No special elements** (`<olum:window>`-style) — attach global listeners in `onMount`, remove them in the cleanup.
 - **No element refs / actions / dynamic `<component is>` / dimension bindings** — all done imperatively in `onMount`.
 - **No integrated component testing** framework yet.
 - **No TypeScript** in components.

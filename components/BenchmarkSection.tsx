@@ -178,6 +178,54 @@ const ecosystem = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
+        <circle cx="7" cy="7" r="3" />
+        <rect x="14" y="4" width="7" height="7" rx="1.5" />
+        <path d="M7 21l4-8 4 8H7z" />
+      </svg>
+    ),
+    name: "Olum Icons",
+    tag: "official",
+    description: "A curated icon set for Olum apps — drop-in SVG components, tree-shakeable and fully typed.",
+    links: [{ label: "icons.olumjs.top", href: "https://icons.olumjs.top" }],
+    accent: "#25C97E",
+  },
+  {
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="2" y="8" width="20" height="10" rx="5" />
+        <line x1="7" y1="11" x2="7" y2="15" />
+        <line x1="5" y1="13" x2="9" y2="13" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="18" cy="14" r="1" />
+      </svg>
+    ),
+    name: "Playground",
+    tag: "official",
+    description: "Explore Olum components interactively — tweak props and see instant results.",
+    links: [{ label: "playground.olumjs.top", href: "https://playground.olumjs.top" }],
+    accent: "#25C97E",
+  },
+  {
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z" />
         <path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
         <path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z" />

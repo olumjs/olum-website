@@ -137,6 +137,17 @@ Native `on*` attributes hold **code** (like real HTML). Two forms:
 - **Several `on*` attributes per element are fine** — each is wired as its own listener (`<input oninput="draft($event)" onblur="save()" />`). Use `onMount` only for listeners on `window`/`document` or ones needing `capture`/`passive`.
 - Inside `<for>`, handlers can reference loop variables directly: `<button onclick="remove(item)">`.
 - On a **component** tag, any `on*` name is a function prop, NOT a DOM event.
+- Recognized inline names = the standard DOM `on*` set (`onclick, oninput, onchange, onsubmit, onreset, onformdata, oninvalid, onselect, onsearch, onkeydown, onfocus, onblur, ondragstart…ondrop, onplay, onpause, onloadedmetadata, ontouchmove, …`).
+- **NOT recognized inline:** `copy`, `cut`, `paste`, `beforeinput`, `focusin`, `focusout` → `host.querySelector(...).addEventListener(...)` in `onMount`, remove in the cleanup.
+
+**Keyboard:** `keydown` fires first and is the only one you can `preventDefault()` to stop the character; `keyup` last; `keypress` is legacy (misses `Escape`/arrows). Fields: `e.key`, `e.code`, `e.ctrlKey/shiftKey/altKey/metaKey`, `e.repeat`.
+```html
+<input value="{state.draft}" oninput="(e)=> state.draft = e.target.value" onkeydown="handleKeydown($event)" />
+<!-- if (e.key === "Enter") { e.preventDefault(); addTag() }  |  ctrl+s: e.key === "s" && (e.ctrlKey || e.metaKey) -->
+```
+**Focus/selection:** `focus`/`blur` do **not** bubble — put them on the field itself (`focusin`/`focusout` bubble but aren't inline). Track "touched" on blur to delay errors. Selected text = `field.value.slice(field.selectionStart, field.selectionEnd)` in `onselect`. Focus a field with `host.querySelector("[name=x]").focus()` (no refs).
+**Drag & drop:** `ondragover` **must** `preventDefault()` or the browser refuses the drop; dropped files are `e.dataTransfer.files` (a `FileList`). Reorder = `draggable="true"` per row + move the item in the array; add `key` on the `<for>` so rows keep their DOM.
+**Clipboard write** is an API, not an event: `navigator.clipboard.writeText(str)` (returns a promise the browser can reject).
 
 ---
 
@@ -336,16 +347,19 @@ Import `onMount` from `olum`; the callback runs on mount; **return a cleanup fun
 </script>
 ```
 `host` is the component's own root element — use it instead of `document.querySelector`. `onMount` is also where you do **refs**, **actions** (there is no `bind:this` / `use:action`), and **global `window`/`document` listeners** — all wired imperatively and cleaned up in the return.
+Same shape for **observers** and anything the element owns: `new ResizeObserver(...).observe(host.querySelector(".box"))` → `return () => observer.disconnect()`; a `<canvas>` `requestAnimationFrame` loop → `cancelAnimationFrame`; a `<video>`'s `currentTime` read per frame (its `onplay`/`onpause`/`onloadedmetadata` still work inline).
 
 ---
 
-## Two-way binding (manual — there is no `model`)
+## Forms & inputs (two-way binding is manual — there is no `model`)
 
-Every binding is a value-ish attribute reading state + an event handler writing back.
+Two ways to run a form, mixable: **(a)** bind each field to state (value-ish attribute reading state + event handler writing back) when the page reacts as the user types; **(b)** bind nothing, give every control a `name`, read `new FormData(form)` once.
+
 ```html
 <input value="{state.text}" oninput="(e) => state.text = e.target.value" />
-<textarea value="{state.text}" oninput="(e) => state.text = e.target.value"></textarea>
+<textarea value="{state.text}" oninput="(e) => state.text = e.target.value"></textarea>  <!-- textarea binds via value=""; value wins over inner text -->
 <input type="number" value="{state.n}" oninput="(e) => state.n = +e.target.value" />  <!-- +cast: e.target.value is a string -->
+<input type="range" value="{state.n}" oninput="(e) => state.n = +e.target.value" min="0" max="10" />
 <input type="checkbox" checked="{state.yes}" onchange="(e) => state.yes = e.target.checked" />
 <input type="radio" name="s" checked="{state.scoops === 1}" onchange="setScoops(1)" />
 <select onchange="(e) => state.color = e.target.value">
@@ -355,6 +369,54 @@ Every binding is a value-ish attribute reading state + an event handler writing 
 ```
 `value="{expr}"` on the `<select>` element itself silently does nothing — put `selected="{expr}"` on each option.
 For `<select multiple>`: `Array.from(e.target.options).filter(o => o.selected).map(o => o.value)`.
+
+**One `set` helper covers the text-like family** (`text, email, password, tel, url, search`, and `date, time, datetime-local, month, week`) — every native attribute (`placeholder, maxlength, minlength, pattern, autocomplete, spellcheck, step, min, max, accept, list`) keeps working as in HTML:
+```html
+<script>
+  const set = (key, e) => (state[key] = e.target.value);
+</script>
+<input type="email" name="email" value="{state.email}" oninput="set('email', $event)" autocomplete="email" />
+<input type="{state.reveal ? 'text' : 'password'}" value="{state.password}" oninput="set('password', $event)" />  <!-- type is a plain string attr → can be dynamic -->
+<input type="hidden" name="plan" value="{state.plan}" />   <!-- never shown, still submitted -->
+```
+- **date/time inputs give a STRING**, never a `Date` (`"2026-08-17"`, `"09:30"`, `"2026-08-17T09:30"`, `"2026-08"`, `"2026-W34"`). Parse yourself: `new Date(state.date + "T00:00:00")`.
+- **`type="color"`**: `oninput` fires while dragging in the picker (live preview), `onchange` once when it closes (commit).
+- **checkbox group from a list:** `<for each="topping of state.menu">` + `checked="{state.toppings.includes(topping)}"` + `onchange="toggle(topping, $event)"` → concat/filter a new array.
+- **`<datalist>` is only a suggestion list** — the typed value is still free. `<input list="opts">` + `<datalist id="opts"><for …><option value="{x}">note</option></for></datalist>`. A `type="range"` can snap to one (`<option value="25" label="25">`).
+- **`<optgroup>`/`<fieldset>`** are normal markup (loopable). One `disabled="{expr}"` on a `<fieldset>` switches off every control inside it and drops them from the submitted data.
+- **`<output for="a b">{total()}</output>`** = live result; **`<progress value="{n}" max="100">`** = task that finishes (no `value` attribute → indeterminate spinner, toggle it with `<if>`); **`<meter value="{n}" low="30" high="70" optimum="100">`** = a measurement, colors itself.
+- **Inputs in a loop:** pass the index — `onchange="toggleDone(index, $event)"` — then write a **new** array back. Typing in one row never disturbs the others (only changed values are written; caret preserved).
+
+**Validation** (native constraints + your own messages):
+```html
+<form novalidate="{state.skip}" onsubmit="handleSubmit($event)" onreset="handleReset()">
+  <input name="user" value="{state.user}" oninput="set('user',$event)" oninvalid="onInvalid($event)" pattern="[a-z][a-z0-9_]+" minlength="3" required />
+  <if when="state.errors.user"><p class="err">{state.errors.user}</p></if>
+  <button type="submit">Save</button>
+  <button type="submit" formnovalidate>Save draft</button>   <!-- skips checks for this button only -->
+</form>
+```
+```js
+const onInvalid = (e) => { e.preventDefault();   // stop the native bubble, render the message yourself
+  state.errors = { ...state.errors, [e.target.name]: e.target.validationMessage }; };
+const handleSubmit = (e) => { e.preventDefault();
+  if (!e.target.noValidate && !e.target.checkValidity()) return; /* send */ };
+// rule no attribute can express: field.setCustomValidity(ok ? "" : "message")  — "" means valid
+```
+
+**Form events:** `input`/`change` **bubble**, so one listener on the `<form>` covers every field.
+```html
+<form onsubmit="handleSubmit($event)" onreset="handleReset()" onformdata="handleFormData($event)" oninput="collect()" onchange="collect()">
+```
+- Always `e.preventDefault()` in `onsubmit` (SPA — no page reload). `e.submitter` = the button that sent it (`<button type="submit" value="publish">`). `<button type="button">` never submits.
+- `new FormData(form)` → `data.get(name)`, `data.getAll(name)` (many controls, one `name`). `onformdata` (`e.formData.append(...)`) is the last chance to add/rewrite fields.
+- Whole-form-no-state pattern: `const form = host.querySelector("form"); for (const [k, v] of new FormData(form).entries()) …` inside `onMount` + `oninput`/`onchange`.
+
+**Contenteditable** — not a form field; mirror it back into state or the next re-render wipes it. Read `textContent` (plain) or `innerHTML` (markup); keep the interpolation tight against the tags on ONE line (a newline becomes real whitespace):
+```html
+<div contenteditable="true" oninput="(e)=> state.title = e.target.textContent">{state.title}</div>
+<div contenteditable="true" html="state.note" oninput="(e)=> state.note = e.target.innerHTML"></div>
+```
 
 ---
 
@@ -518,6 +580,14 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 | `<comp/>` | `<Comp/>` | components are PascalCase |
 | `<select value="{x}">` | `selected="{x === …}"` on each `<option>` | value on select does nothing |
 | `bind:this` / element refs | `host.querySelector(…)` in `onMount` | no refs |
+| `<textarea>{state.text}</textarea>` | `<textarea value="{state.text}">` | textarea binds through `value` |
+| `state.n = e.target.value` (number field) | `state.n = +e.target.value` | `e.target.value` is always a string |
+| `new Date(state.date)` | `new Date(state.date + "T00:00:00")` | date/time inputs give a plain string |
+| `state.files.map(…)` | `Array.from(state.files).map(…)` | a file input gives a `FileList` |
+| `oncopy` / `onpaste` / `onfocusin` inline | `addEventListener` in `onMount` + cleanup | not in the known `on*` list |
+| `onfocus`/`onblur` on a wrapper | put them on the field itself | focus/blur don't bubble |
+| `ondragover` without `preventDefault()` | `ondragover="(e)=> e.preventDefault()"` | otherwise the drop is refused |
+| a `contenteditable` left out of state | mirror `textContent`/`innerHTML` into state | re-render wipes what isn't in state |
 | `use:action` | wire up in `onMount`, clean up in its return | no action directive |
 | `each="i of state.n"` | `each="i of Array.from({length: state.n}, (_,k)=>k+1)"` | numeric range needs a literal number |
 | two `onMount(…)` calls | one call, one combined cleanup | only the first is wired |

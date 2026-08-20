@@ -223,7 +223,7 @@ Declare reactive state as a **literal top-level `const state = { ... }`**. Mutat
 - **Only what needs to render, renders.** A write to a state key the **template never reads** doesn't schedule a render at all (so a key used only in handlers/`onMount` is free). Store subscriptions come from *reading* the store during render. If a parent and its child are both dirty in the same tick, only the parent renders (its pass rebuilds the child). Updates for components that left the DOM are discarded.
 - **Identity:** component instances have their own; plain elements opt in with `key`. Keyed nodes are **moved** (`moveBefore` where supported), not re-created; unkeyed children are matched positionally with a short insertion/deletion lookahead. A bigger unkeyed reshuffle repaints nodes with a neighbour's data — add `key`.
 - **Form controls are never clobbered:** `value`/`checked` are written to a live input only when the **template's** value changed, and the caret is preserved when they are; a `<select>` keeps the user's choice unless the template moves the `selected` option.
-- `window.olum.flushUpdates()` settles pending re-renders synchronously (idempotent; mostly for tests / imperative DOM reads right after a write).
+- `import { flushUpdates } from "olum"` settles pending re-renders synchronously (idempotent; mostly for tests / imperative DOM reads right after a write). `window.olum.flushUpdates()` is the same call, but `window.olum` exists in DEVELOPMENT only — a production build ships no runtime globals.
 - If a patch throws, olum logs `patch failed — falling back to full re-render` and rebuilds that component's content (correct, but browser state resets) — that warning is a bug worth reporting.
 
 ### Derived values = plain functions (no "computed")
@@ -543,7 +543,7 @@ export const cart = store({
 ```
 - Same **deep reactivity** as `state` (nested objects/arrays/Map/Set). Non-plain objects untracked. Same-reference/no-change writes are skipped.
 - Subscriptions need no cleanup: a subscriber that left the DOM is dropped on the next store change, and when a parent and its child both read the same store only the **parent** re-renders.
-- **Writes are microtask-batched** — many writes in a tick paint once. Component `state` batches the same way, so the store is **not** faster for large collections; choose it because the data is **shared**, not for performance. DOM isn't updated immediately after a write — a store write settles in TWO hops (one microtask notifies subscribers, the next re-renders them), so read it with `await Promise.resolve(); window.olum.flushUpdates();`.
+- **Writes are microtask-batched** — many writes in a tick paint once. Component `state` batches the same way, so the store is **not** faster for large collections; choose it because the data is **shared**, not for performance. DOM isn't updated immediately after a write — a store write settles in TWO hops (one microtask notifies subscribers, the next re-renders them), so read it with `await Promise.resolve(); flushUpdates();` (`import { flushUpdates } from "olum"`).
 - Mutating from outside an action works (`cart.items = []` in a handler). Split by concern (`cart.js`, `session.js`). `store(init)` takes a plain object (no class instances). `olum` auto-loads `olum-store`.
 
 ### state vs props vs store

@@ -16,10 +16,10 @@ const links = {
   ],
   Community: [
     { label: "GitHub", href: "https://github.com/olumjs" },
-    // { label: "Bluesky", href: "https://bsky.app/profile/olumjs.bsky.social" },
+    { label: "Bluesky", href: "https://bsky.app/profile/olumjs.bsky.social" },
     { label: "Discord", href: "https://discord.gg/2zK7tb2Cg9" },
     { label: "Twitter", href: "https://x.com/eissapk/status/2090443704033067189" },
-    { label: "Blog", href: "/blog" },
+    // { label: "Blog", href: "/blog" },
   ],
   Resources: [
     { label: "Docs", href: "/docs" },

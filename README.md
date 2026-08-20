@@ -8,4 +8,9 @@
 # Olumjs
 The VanillaJS developer’s platform.
 
-See [Documentation](https://olum.eissawebdev.top/docs)
+See [Documentation](https://olumjs.top/docs)
+
+## Community
+- [X thread](https://x.com/eissapk/status/2090443704033067189)
+- [Bluesky](https://bsky.app/profile/olumjs.bsky.social)
+- [Discord](https://discord.gg/2zK7tb2Cg9)

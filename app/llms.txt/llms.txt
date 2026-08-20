@@ -136,7 +136,14 @@ Native `on*` attributes hold **code** (like real HTML). Two forms:
 - **No event modifiers.** Do it in the handler: `onsubmit="(e)=> { e.preventDefault(); save() }"`.
 - **Several `on*` attributes per element are fine** — each is wired as its own listener (`<input oninput="draft($event)" onblur="save()" />`). Use `onMount` only for listeners on `window`/`document` or ones needing `capture`/`passive`.
 - Inside `<for>`, handlers can reference loop variables directly: `<button onclick="remove(item)">`.
-- On a **component** tag, any `on*` name is a function prop, NOT a DOM event.
+- On a **component** tag (any PascalCase tag you import — `<Input/>`, `<TextField/>`, `<Comp/>`), any `on*` name is a **function prop, NOT a DOM event** — and a function prop takes a **NAME only**. Only the capital letter separates the two cases:
+```html
+<input oninput="state.counter++" />          <!-- ✓ real HTML element: inline code is fine -->
+<input oninput="e => console.log(123)" />    <!-- ✓ real HTML element -->
+<Input oninput="{handleInput}" />            <!-- ✓ YOUR component: a name -->
+<Input oninput="() => console.log(123)" />   <!-- ✗ arrives as a plain string, never runs -->
+<Input oninput="{() => console.log(123)}" /> <!-- ✗ arrives as undefined -->
+```
 - Recognized inline names = the standard DOM `on*` set (`onclick, oninput, onchange, onsubmit, onreset, onformdata, oninvalid, onselect, onsearch, onkeydown, onfocus, onblur, ondragstart…ondrop, onplay, onpause, onloadedmetadata, ontouchmove, …`).
 - **NOT recognized inline:** `copy`, `cut`, `paste`, `beforeinput`, `focusin`, `focusout` → `host.querySelector(...).addEventListener(...)` in `onMount`, remove in the cleanup.
 
@@ -265,6 +272,7 @@ Use a component by its **PascalCase** tag; import it in `<script>`.
 - `count="{n + 1}"` → the expression's **real value/type** (number, object, etc.) when the whole value is one `{expr}`.
 - `greet="Hi {state.name}"` → interpolated **string**.
 - **No spread** (`<Comp {...obj} />`) and **no shorthand** (`<Comp {a} />` / `<Comp a={a} />`). Pass each field: `<Comp a="{obj.a}" />`.
+- **Function props travel by NAME** (component tags only — lowercase HTML tags keep normal inline `on*` code). Props are handed over as data, so a function only arrives when the value is a plain name the compiler can resolve: a top-level function of the parent, or a name destructured from `props()`. `onX="(e)=>…"` arrives as a string; `onX="{(e)=>…}"`, `onX="{obj.fn}"` and `onX="{state.fn}"` arrive as `undefined`; `onX="{make(id)}"` passes the call's result. To pre-bind data, pass it as its own prop and let the child call back with it (`<Row row="{row}" onPick="{pick}" />` → child calls `onPick(row.id)`).
 - Prop names must be plain camelCase identifiers (dashes truncate the name on component tags).
 
 **Reading props in the child** — `props()` imported from `olum`, called once at the **top level** of `<script>`:
@@ -293,7 +301,7 @@ Destructuring from `props()` is a **compiler feature**: each destructured name c
   const inc = () => onChange(value + 1);
 </script>
 ```
-Assigning to a destructured prop throws (`const`); never mutate props. On a **component** tag, `on*` names (even `onclick`) are just function props the child chooses when to call. A function prop resolves against the component whose template **authored** the tag, so it still arrives when the tag is written inside another component's slot (`<Section><Card onPick="{pick}" /></Section>`).
+Assigning to a destructured prop throws (`const`); never mutate props. On a **component** tag, `on*` names (even `onclick`) are just function props the child chooses when to call — so they follow the NAME-only rule above, and the inline forms allowed on `<button onclick="…">` do not work on `<CustomButton onclick="…">`. A function prop resolves against the component whose template **authored** the tag, so it still arrives when the tag is written inside another component's slot (`<Section><Card onPick="{pick}" /></Section>`).
 
 ---
 
@@ -573,6 +581,8 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 | `oninput={(e)=>…}` | `oninput="(e)=>…"` | events in `""` |
 | `<Comp {a} />` / `<Comp a={a} />` | `<Comp a="{a}" />` | no shorthand / no naked-brace prop |
 | `<Comp {...obj} />` | `<Comp a="{obj.a}" b="{obj.b}" />` | no spread — pass each field |
+| `<Comp onX="(e)=>…" />` | `<Comp onX="{handler}" />` | on a component `on*` is a prop — the arrow arrives as a string |
+| `<Comp onX="{(e)=>…}" />` / `<Comp onX="{obj.fn}" />` | name the function, pass the name | function props travel by name — anything else arrives `undefined` |
 | `:style="{…}"` / `:title="x"` | `style="color:{x}"` / `title="{x}"` | string + `{}` |
 | `model="state.x"` | `value="{state.x}"` + `oninput` | bind manually |
 | `mode="prevent"` | `e.preventDefault()` in handler | no event modifiers |
@@ -607,6 +617,7 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 - **Unkeyed `<for>` reorders match by position** — nodes are repainted with a neighbour's data instead of moving. Add `key`.
 - **No special elements** (`<olum:window>`-style) — attach global listeners in `onMount`, remove them in the cleanup.
 - **No element refs / actions / dynamic `<component is>` / dimension bindings** — all done imperatively in `onMount`.
+- **Function props travel by name** — an inline arrow, `obj.fn` or a call cannot be a function prop on a component tag; name the handler in `<script>` and pass the name.
 - **No integrated component testing** framework yet.
 - **No TypeScript** in components.
 - Dynamic-component switching: use an `<if>/<else-if>/<else>` chain over a string in state.

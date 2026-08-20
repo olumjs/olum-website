@@ -1,195 +1,11 @@
 [
   {
-    "slug": "olumjs-guide",
-    "title": "The Complete OlumJS Guide",
-    "description": "Everything OlumJS in one place — state and reactivity, the full template syntax including transitions, components and props, routing, the global store, lifecycle, scoped CSS, security, and the gotchas — each summarized with a code example, plus a one-screen cheat-sheet to bookmark.",
-    "publishedAt": "2026-07-11",
-    "readingTime": "11 min read",
-    "tags": [
-      "guide",
-      "reference",
-      "documentation"
-    ],
-    "author": {
-      "name": "Eissa Saber",
-      "avatar": "ES",
-      "color": "#25C97E",
-      "role": "Creator of Olumjs"
-    },
-    "sections": [
-      {
-        "heading": "One design principle",
-        "body": "OlumJS draws a single line through its whole template syntax: is an attribute fundamentally code or a string? Native HTML already answers it — onclick=\"\" is code, class=\"\" is a string.\n\n- Code-shaped attributes — when, each, key, on*, html — take a JavaScript expression directly inside the quotes.\n- Everything else is a literal string, with {expr} for the dynamic bits.\n\nThat's the entire mental model. No naked braces, no colon-bindings, no directives to memorize. This guide walks every feature the same way: a sentence, then a snippet."
-      },
-      {
-        "heading": "Component file structure",
-        "body": "A component is one .html file with up to three parts: a <script> for logic, a scoped <style>, and the template (everything else). State, methods, and props are all in the same closure, so the template can reference them directly. Component tag names are PascalCase — that's how the compiler tells a component from a plain element.",
-        "code": "<!-- Counter.html -->\n<script>\n  const state = { count: 0 };\n  const inc = () => state.count++;\n</script>\n\n<style>\n  .counter { font-weight: 700; }\n</style>\n\n<div class=\"counter\">\n  Count: {state.count}\n  <button onclick=\"inc()\">+</button>\n</div>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "State & reactivity",
-        "body": "Declare reactive state as a literal top-level const state = { … }. Mutating state re-renders the component, and reactivity is deep — nested objects, arrays, Map, and Set are all tracked. Only state is reactive; plain const/let variables are not. Re-renders diff-patch the DOM in place, so untouched nodes — focus, caret, scroll position, a playing video — survive the update, and many writes in the same tick are batched into a single patch.",
-        "code": "<script>\n  const state = { count: 0, user: { name: \"Ann\" } };\n\n  const inc = () => state.count++;               // mutate → re-render\n  const rename = () => (state.user.name = \"Bo\"); // nested mutation re-renders too\n</script>\n\n<p>{state.count} — {state.user.name}</p>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Derived values (no \"computed\")",
-        "body": "There's no computed keyword — a derived value is just a plain function that reads state. Call it in the template like any other expression; a derived function can call another derived function too.",
-        "code": "<script>\n  const state = { count: 1 };\n  const doubled = () => state.count * 2;\n  const quadrupled = () => doubled() * 2;   // derived can call derived\n</script>\n<p>{doubled()} {quadrupled()}</p>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Text interpolation",
-        "body": "Any {expr} in text is evaluated as JavaScript and HTML-escaped by default, so it's XSS-safe. null and undefined render as an empty string. There is no escape for a literal { — every {…} is treated as interpolation; use {String.fromCharCode(123)} if you need a literal brace.",
-        "code": "<p>Hello {state.user.name}</p>\n<p>Total: {state.items.length} items</p>\n<p>{state.count > 0 ? 'positive' : 'zero'}</p>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Watchers",
-        "body": "Declare const watcher = { … } with a function per state key. It fires on top-level key assignment only — not a nested mutation — receiving (oldValue, newValue). To make a nested change trigger it, assign a fresh value to the top-level key instead (e.g. spread the object back onto itself).",
-        "code": "<script>\n  const state = { count: 0, log: \"—\" };\n  const watcher = {\n    count(old, next) {\n      state.log = `count: ${old} → ${next}`;\n    },\n  };\n</script>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Conditionals: if / else-if / else",
-        "body": "when is always a JS expression. The element is physically added to or removed from the DOM as the condition changes.",
-        "code": "<if when=\"state.tab === 'a'\">\n  <p>Tab A</p>\n</if>\n<else-if when=\"state.tab === 'b'\">\n  <p>Tab B</p>\n</else-if>\n<else>\n  <p>Fallback</p>\n</else>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Show / hide",
-        "body": "Like <if>, but the element stays in the DOM and only its display is toggled. Reach for <show> when you want to preserve DOM state or avoid re-mounting cost; reach for <if> when the element should truly not exist.",
-        "code": "<show when=\"state.visible\">\n  <div class=\"panel\">Stays in the DOM; only display toggles.</div>\n</show>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Loops: for",
-        "body": "each is a JS expression with three forms — array (item of list), numeric range (i of N, where i runs 1 → N), and object keys (key in obj). When the loop body is a component, add key so instances are reused by identity across reorders instead of by position. On plain elements, key is a harmless no-op.",
-        "code": "<!-- array -->\n<for each=\"fruit of state.fruits\">\n  <li>{fruit.name}</li>\n</for>\n\n<!-- numeric range: i goes 1 → N -->\n<for each=\"i of 6\"><span>Step {i}</span></for>\n\n<!-- object keys -->\n<for each=\"key in state.settings\">\n  <div>{key}: {state.settings[key]}</div>\n</for>\n\n<!-- keyed (only matters for component loops) -->\n<for each=\"todo of state.todos\" key=\"todo.id\">\n  <TodoRow todo=\"{todo}\" />\n</for>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Events",
-        "body": "Native on* attributes hold code, just like real HTML. Use a method call, or an inline arrow that gets extracted into a method automatically. Pass the DOM event with $event. There are no event modifiers — call e.preventDefault() in the handler instead.",
-        "code": "<button onclick=\"inc()\">+</button>\n<button onclick=\"inc(), log()\">multi</button>\n<input oninput=\"(e) => state.text = e.target.value\" />\n<input oninput=\"setValue($event)\" />\n<form onsubmit=\"(e) => { e.preventDefault(); save() }\"></form>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Two-way binding",
-        "body": "There is no model attribute — bind manually with a value plus an oninput handler. Explicit, greppable, and it works for any form field.",
-        "code": "<input\n  type=\"text\"\n  value=\"{state.text}\"\n  oninput=\"(e) => state.text = e.target.value\"\n/>\n<p>Echo: {state.text}</p>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Attributes: strings vs code",
-        "body": "String attributes are the default — a literal string with {expr} inside for the dynamic parts, including inline style. Code attributes (when, each, key, on*, html) evaluate their quoted value as JavaScript.",
-        "code": "<!-- string attributes: literal + {expr} -->\n<div class=\"card {state.active ? 'is-active' : ''}\"></div>\n<a href=\"/users/{state.user.id}\" title=\"Open {state.user.name}\">Profile</a>\n<div style=\"color:{state.color}; background:{state.bg}; padding:8px;\">box</div>\n\n<!-- code attributes: value IS an expression -->\n<if when=\"state.count > 0\"> … </if>\n<button onclick=\"inc()\">+</button>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Raw HTML (opt-in)",
-        "body": "All interpolation is escaped by default. Opt out only for trusted, sanitized HTML, two ways: html=\"expr\" replaces an element's content, and olum.html(value) injects raw HTML inline inside {}. Both are deliberate, greppable bypasses.\n\nNever pass untrusted user content to html= or olum.html() — sanitize first.",
-        "code": "<!-- element-level: replaces children with raw HTML -->\n<div html=\"state.articleHtml\"></div>\n\n<!-- inline, mixed with text -->\n<p>Intro: {olum.html(state.snippetHtml)} — end.</p>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Components & props",
-        "body": "Import a child in <script> and use it by its PascalCase tag. A prop is a literal string by default; prop=\"{expr}\" passes the expression's real value and type; and {} inside text yields an interpolated string.",
-        "code": "<!-- Parent.html -->\n<script>\n  import StatusBadge from \"./StatusBadge\";\n  const state = { name: \"Ann\", score: 5 };\n</script>\n\n<StatusBadge\n  label=\"Online\"            <!-- \"Online\"  → string              -->\n  count=\"{state.score}\"     <!-- 5         → number (type kept)   -->\n  data=\"{state.user}\"       <!-- {...}     → object (type kept)   -->\n  greet=\"Hi {state.name}\"   <!-- \"Hi Ann\"  → interpolated string  -->\n/>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Reading props in the child",
-        "body": "Import props from olum and destructure it once at the top level of <script> — no onMount required. Destructuring is a compiler feature: each destructured name (plus aliases and defaults) compiles into a fresh props().name read, so it stays live after the parent re-renders. The exceptions that only snapshot the initial value: ...rest, nested patterns, computed keys, and destructuring done anywhere other than the top level. Props are read-only — a child requests a change through a callback prop, it never assigns to one.",
-        "code": "<!-- StatusBadge.html -->\n<script>\n  import { props } from \"olum\";\n  const { label, color } = props();      // stays LIVE — no need to call props() again\n  const { size = \"md\" } = props();       // default when the parent omits it\n</script>\n\n<span class=\"badge\" style=\"color:{color}\">{label}</span>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Slots",
-        "body": "Content placed between a component's tags is exposed as children on props() — injected as raw, trusted markup (not escaped), so don't route untrusted strings through a slot. Like any other prop, a destructured children stays live.",
-        "code": "<!-- parent -->\n<CounterCard title=\"Score\">\n  <em>passed from the parent</em>\n</CounterCard>\n\n<!-- CounterCard.html -->\n<script>\n  import { props } from \"olum\";\n  const { children } = props();\n</script>\n<if when=\"children\">{children}</if>\n<else><div class=\"slot\">no content</div></else>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Scope: public / private",
-        "body": "A component's top-level props and methods are private by default — encapsulated. Add scope keywords to the <script> tag to expose them: public (both), public-props, public-methods, and their private-* counterparts. An exclude-<name> attribute carves a single exception out of the currently open group (camelCase names become kebab-case, e.g. getAge → exclude-get-age). Attributes read left to right, so each keyword opens a group that following exclude-* attach to.",
-        "code": "<!-- No attributes → everything PRIVATE (the default) -->\n<script> … </script>\n\n<!-- Expose all props AND methods -->\n<script public> … </script>\n\n<!-- Expose props only; methods stay private -->\n<script public-props> … </script>\n\n<!-- Public props EXCEPT one; private methods EXCEPT one -->\n<script public-props exclude-state private-methods exclude-get-age> … </script>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Scoped CSS",
-        "body": "A component's <style> is automatically scoped — selectors only affect that component's own elements, so nothing leaks. Just write normal CSS.",
-        "code": "<style>\n  .title { color: #4f46e5; }   /* won't leak to other components */\n</style>\n<h1 class=\"title\">Hello</h1>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Transitions",
-        "body": "Wrap a single element in <transition> to animate it as it enters or leaves. The intro plays when the element is added (e.g. by an <if>); its removal is deferred so the outro can finish first. Built in, no import needed: fade, fly, scale, slide, and draw — each takes delay, duration, and a named easing (the full set lives on olum.easings). Write a custom one as a plain function (node, params) => ({ css, tick }) — the same contract Svelte uses.",
-        "code": "<if when=\"state.visible\">\n  <transition transition=\"fade\"><p>Fades in and out</p></transition>\n</if>\n\n<!-- separate enter/leave, with params -->\n<transition in=\"fly({ y: 200, duration: 400 })\" out=\"fade\">\n  <p>Flies in, fades out</p>\n</transition>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Animating lists: flip & crossfade",
-        "body": "Inside a keyed <for>, <transition> plays its in/out as items are added or removed. Add a flip attribute and a reordered item animates smoothly to its new position (needs a keyed loop, since that's how identity survives the reorder). crossfade() returns a [send, receive] pair — put out=\"send({ key })\" on the element leaving one spot and in=\"receive({ key })\" on the element entering another spot with the same key, and the two fly between them as a single element. Key off a primitive id, not an object — state is deeply reactive, so object-identity checks won't behave as expected.",
-        "code": "<script>\n  import { crossfade } from \"olum\";\n\n  const _cf = crossfade({ duration: 300 });\n  const send = (node, params) => _cf[0](node, params);\n  const receive = (node, params) => _cf[1](node, params);\n</script>\n\n<for each=\"todo of state.todos\" key=\"todo.id\">\n  <transition flip in=\"receive({ key: todo.id })\" out=\"send({ key: todo.id })\">\n    <li>{todo.text}</li>\n  </transition>\n</for>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Debugging: <log>",
-        "body": "<log> compiles to a console.log call that runs on the initial render and again whenever the logged value changes. It renders nothing in the DOM.",
-        "code": "<log>{state.user}</log>\n<log>{state.a, state.b}</log>  <!-- multiple args pass through -->",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Lifecycle: onMount & host",
-        "body": "Import onMount from olum and pass a callback that runs when the component mounts; return a function from it to run cleanup on unmount (e.g. when an <if> toggles it off or a keyed item is removed). Inside onMount, host refers to this component's own root element — query within it instead of document.querySelector, which could match another instance.",
-        "code": "<script>\n  import { onMount } from \"olum\";\n\n  onMount(() => {\n    const main = host.querySelector(\"main\");   // host = this component's root\n    console.log(\"mounted\");\n    return () => console.log(\"unmounted\");     // cleanup on removal\n  });\n</script>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Escaping & security",
-        "body": "OlumJS escapes by default to prevent XSS. Every text and attribute {expr} runs through olum.esc. The only way to render raw HTML is the deliberate opt-out — html=\"expr\" or olum.html() — which you should reserve for trusted, pre-sanitized content."
-      },
-      {
-        "heading": "Routing (olum-router)",
-        "body": "Routing is file-based — the file tree under src/ is the route table, no config needed. A folder is a route only if it has a page.html; a [param] folder becomes a dynamic segment, read with params(). Use to=\"/path\" for client-side navigation (it adds an active class when the URL matches); a plain href does a hard reload. Navigate programmatically with push, replace, back, forward, and go, and read the current path with pathname(). Add a not-found.html at the root of src/ for a global 404.",
-        "code": "<!-- src/blog/[slug]/page.html -->\n<script>\n  import { params, push } from \"olum\";\n  const { slug } = params();          // URL-decoded, then lowercased\n  const goHome = () => push(\"/\");\n</script>\n<h1>blog: {slug}</h1>\n<a to=\"/blog\">All posts</a>\n<button onclick=\"goHome()\">Home</button>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Global store (olum-store)",
-        "body": "A plain object-style store for state that's shared across components or needs to survive route changes. Define it once in a plain .js module with store({ … }); components subscribe just by reading it during render, and re-render when it changes — no providers, no wiring. It has the same deep reactivity as component state, and writes are microtask-batched the same way, so reach for the store because the data is shared, not for performance. Use method shorthand for actions — this is the store inside a method, but an arrow function won't bind it.\n\nRule of thumb: local-only data is state; one level down is a prop (plus a callback prop to report changes back up); anything shared across components, or that must outlive a route change, belongs in the store. Prop-drilling through a component that never uses the prop is a sign to move that data to the store instead.",
-        "code": "// store.js\nimport { store } from \"olum\";\nexport const cart = store({\n  items: [],\n  add(name) { this.items.push(name); },   // method shorthand — `this` is the store\n  clear() { this.items = []; },\n});\n\n<!-- Basket.html -->\n<script>\n  import { cart } from \"./store\";\n</script>\n<p>{cart.items.length} items</p>          <!-- reading this subscribes Basket -->\n<button onclick=\"cart.clear()\">Empty</button>",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Common mistakes",
-        "body": "OlumJS has no naked braces and one way to do each thing. The patterns you might reach for from other frameworks don't work here:\n\n- Values for when / each / on* live inside the quotes — write when=\"x\", not when={x}\n- Bind inputs with value=\"{state.x}\" plus an oninput handler — there's no model\n- No prop shorthand or naked-brace props — write a=\"{a}\", not {a} or a={a}\n- Inline styles are a string with {expr}: style=\"color:{x}\" — not :style\n- Components are PascalCase — <Comp/>, not <comp/>\n- Any {…} in text is interpolation — for a literal brace use {String.fromCharCode(123)}\n- No event modifiers — call e.preventDefault() in the handler\n- Reassigning state.list = state.list is a no-op — assign a fresh array (spread/map/filter) to force a re-render\n- Arrow functions in a store lose this — use method shorthand: add() { this.items.push(x) }\n- No <component is=\"...\"> — switch components with an if / else-if / else chain over a string in state\n- Key a crossfade off a primitive id (state.selectedId), not an object — deep reactivity breaks object-identity checks"
-      },
-      {
-        "heading": "Cheat-sheet",
-        "body": "The entire template syntax on one screen — bookmark this block.",
-        "code": "<!-- TEXT (auto-escaped) -->\n{state.value}\n{a > b ? 'x' : 'y'}\n\n<!-- RAW / UNESCAPED HTML (opt out of escaping) -->\n<div html=\"state.articleHtml\"></div>\n{olum.html(state.snippetHtml)}\n\n<!-- STRING ATTRIBUTES (literal + {expr}) -->\n<div class=\"box {state.cls}\" style=\"color:{state.color}\" title=\"Hi {state.name}\"></div>\n\n<!-- EVENTS (code in \"\") -->\n<button onclick=\"save()\">Save</button>\n<input oninput=\"(e)=> state.text = e.target.value\" />\n<form onsubmit=\"(e)=> { e.preventDefault(); submit() }\"></form>\n\n<!-- CONDITIONALS -->\n<if when=\"state.tab === 'a'\">…</if>\n<else-if when=\"state.tab === 'b'\">…</else-if>\n<else>…</else>\n\n<!-- SHOW -->\n<show when=\"state.visible\">…</show>\n\n<!-- LOOPS -->\n<for each=\"item of state.items\" key=\"item.id\"><Row item=\"{item}\" /></for>\n<for each=\"i of 6\">{i}</for>\n<for each=\"key in state.map\">{key}</for>\n\n<!-- COMPONENTS + PROPS + SLOT -->\n<Card title=\"Hi\" count=\"{n + 1}\" data=\"{state.obj}\">\n  <span>slot content → {children}</span>\n</Card>\n\n<!-- PROPS (in the child's <script>) -->\nconst { title, children } = props();  // INITIAL snapshot, no onMount needed\n{props().title}                       // LATEST value, call anywhere\n{props().children}                    // LATEST slot content\n\n<!-- host: this component's root element, inside onMount -->\nonMount(() => { host.querySelector(\"main\"); });\n\n<!-- TRANSITIONS -->\n<transition transition=\"fade\">…</transition>\n<transition in=\"fly({ y: 200 })\" out=\"fade\">…</transition>\n<transition flip>…</transition>\n\n<!-- ROUTER -->\n<a to=\"/about\">About</a>\nimport { push, params, pathname } from \"olum\";\n\n<!-- STORE -->\nimport { store } from \"olum\";\nexport const cart = store({ items: [], add(name) { this.items.push(name); } });",
-        "codeLanguage": "html"
-      },
-      {
-        "heading": "Where to go next",
-        "body": "That's the whole framework, summarized. For the full detail on any topic, read the [docs](/docs); to try it hands-on, open the [Playground](/playground) and edit a live example. When you're ready to build something, the todo-app pattern — state, a list, events, and a conditional empty state — is a great first project."
-      }
-    ]
-  },
-  {
     "slug": "why-olumjs",
     "title": "What Is OlumJS, and Why Does It Exist?",
     "description": "The honest story behind OlumJS — a tiny framework for building SPAs with nothing but HTML, CSS, and vanilla JavaScript. What it is, why I built it, who it's for, when to use it (and when not to), its core idea, and the ecosystem around it.",
     "publishedAt": "2026-07-11",
-    "readingTime": "7 min read",
-    "tags": [
-      "philosophy",
-      "vanilla-js",
-      "story"
-    ],
+    "readingTime": "8 min read",
+    "tags": ["philosophy", "vanilla-js", "story"],
     "author": {
       "name": "Eissa Saber",
       "avatar": "ES",
@@ -199,7 +15,7 @@
     "sections": [
       {
         "heading": "The short version",
-        "body": "OlumJS is a tiny JavaScript framework that lets you build single-page apps with nothing but the basics — real HTML, CSS, and vanilla JavaScript. A component isn't a special file format; it's an ordinary .html file. no new language to learn, and the whole runtime is about 11 kb for the core.\n\nIt exists for one kind of moment: you have an idea and you want to prove it — fast. This is the story of what Olum is, why I built it, and when you should (and shouldn't) reach for it."
+        "body": "OlumJS is a tiny JavaScript framework that lets you build single-page apps with nothing but the basics — real HTML, CSS, and vanilla JavaScript. A component isn't a special file format; it's an ordinary .html file. No new language to learn, and the whole runtime is about 11 kb for the core.\n\nIt exists for one kind of moment: you have an idea and you want to prove it — fast. This is the story of what Olum is, why I built it, and when you should (and shouldn't) reach for it."
       },
       {
         "heading": "First, the name",
@@ -215,7 +31,7 @@
       },
       {
         "heading": "Why Olum over React, Vue, or Svelte?",
-        "body": "Here's my honest answer. Olum is plain text by about 90%. A component is literally an HTML file, so your editor already knows how to work with it — native formatting, native syntax highlighting, no editor extension to install, and no browser devtools extension to keep compatible across Chrome, Firefox, and the rest. It stays out of your way.\n\nI'll also be honest about its scope. Olum was designed for small to medium-sized applications, with simplicity and developer experience as the primary goals rather than trying to solve every use case. The framework closest to Olum is probably Svelte. Funny enough, I only discovered Svelte after I'd already built Olum. If I'd known about it earlier, I might never have started this project at all. Even today, though, some of Svelte's template syntax—especially its conditionals and loops—doesn't feel as natural to me. I wanted templates to look and feel like HTML first, and that's the difference I care about."
+        "body": "Here's my honest answer. Olum is plain text by about 90%. A component is literally an HTML file, so your editor already knows how to work with it — native formatting, native syntax highlighting, no editor extension to install, and no browser devtools extension to keep compatible across Chrome, Firefox, and the rest. It stays out of your way.\n\nI'll also be honest about its scope. Olum was designed for small applications, with simplicity and developer experience as the primary goals rather than trying to solve every use case. The framework closest to Olum is probably Svelte. Funny enough, I only discovered Svelte after I'd already built Olum. If I'd known about it earlier, I might never have started this project at all. Even today, though, some of Svelte's template syntax—especially its conditionals and loops—doesn't feel as natural to me. I wanted templates to look and feel like HTML first, and that's the difference I care about."
       },
       {
         "heading": "It's just HTML — and that's the whole point",
@@ -243,7 +59,7 @@
       },
       {
         "heading": "The ecosystem",
-        "body": "Olum is a small constellation of pieces, and it's a solo project today:\n\n- Core (olum) — builds the tree and handles events, the store, and hooks. It stays tiny because the compiler carries the load.\n- Compiler (olum-compiler) — compiles each .html component into a real JS module. It's the heart of the system and does most of the work.\n- Router (olum-router) — file-system routing: directories plus page.html files become your routes. It works today and is still growing.\n- Store (olum-store)  — Plain object-style global state. Define it once, import anywhere — components subscribe just by reading it, no providers or wiring.\n- DevTool — not fully ready, but usable. It injects straight into your app when you enable it from the UI or the console — no browser extension, no cross-browser compatibility headaches.\n- VS Code extension — optional, since a component is just an HTML file. Install it and it adds snippets and highlights the logic bits like <if> and <for>, so you can tell real HTML apart from Olum logic at a glance.\n- Playground — the fastest way to try Olum online, with plenty of examples inspired by Svelte's playground.\n\nThe project rests on three pillars: olum (core), olum-router, and olum-compiler"
+        "body": "Olum is a small constellation of pieces, and it's a solo project today:\n\n- Core ([olum](https://github.com/olumjs/olum)) — builds the tree and handles events, the store, and hooks. It stays tiny because the compiler carries the load.\n- Compiler ([olum-compiler](https://github.com/olumjs/olum-compiler)) — compiles each .html component into a real JS module. It's the heart of the system and does most of the work.\n- Router ([olum-router](https://github.com/olumjs/olum-router)) — file-system routing: directories plus page.html files become your routes. It works today and is still growing.\n- CLI ([olum-cli](https://github.com/olumjs/olum-cli)) — creates and manages Olum projects. It's what runs behind npx create-olum, so you never install it yourself.\n- Store ([olum-store](https://github.com/olumjs/olum-store)) — plain object-style global state. Define it once, import anywhere — components subscribe just by reading it, no providers or wiring.\n- Transitions ([olum-transition](https://github.com/olumjs/olum-transition)) — transitions and animations, for when a prototype needs to feel finished.\n- UI ([olum-ui](https://github.com/olumjs/olum-ui)) — ready-made components so you're not rebuilding a modal or a dropdown on every hackathon project.\n- Icons ([olum-icons](https://github.com/olumjs/olum-icons)) — an SVG icon set that drops straight into your templates.\n- DevTool ([olum-devtool](https://github.com/olumjs/olum-devtool)) — not fully ready, but usable. It injects straight into your app when you enable it from the UI or the console — no browser extension, no cross-browser compatibility headaches.\n- VS Code extension ([olum-vsc](https://github.com/olumjs/olum-vsc)) — optional, since a component is just an HTML file. Install it and it adds snippets and highlights the logic bits like <if> and <for>, so you can tell real HTML apart from Olum logic at a glance.\n- [playground](https://www.olumjs.top/playground) — the fastest way to try Olum online, with plenty of examples inspired by Svelte's playground.\n\nThe project rests on three pillars: olum (core), olum-router, and olum-compiler. Everything else is optional."
       },
       {
         "heading": "Try it in 30 seconds",
@@ -253,7 +69,7 @@
       },
       {
         "heading": "Where Olum is going",
-        "body": "The vision is simple, and a little stubborn: stay focused on the basics, and keep the current vanilla syntax untouched. I might add to it, but I won't change what's already there — which means if you use Olum today and come back in a few years, there'll be no migration guide waiting for you. Your code will still work.\n\n\nIf any of this resonates — if you've ever wanted to just build the thing without adopting a framework's entire universe — give Olum a try. Start with the [Playground](/playground), or read the [complete guide](/blog/olumjs-guide)."
+        "body": "The vision is simple, and a little stubborn: stay focused on the basics, and keep the current vanilla syntax untouched. I might add to it, but I won't change what's already there — which means if you use Olum today and come back in a few years, there'll be no migration guide waiting for you. Your code will still work.\n\n\nIf any of this resonates — if you've ever wanted to just build the thing without adopting a framework's entire universe — give Olum a try. Start with the [Playground](/playground)"
       }
     ],
     "featured": true

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import CliCommand from "@/components/CliCommand";
-import { general } from "@/lib/data";
 
 const CLI_CMD = "npx create-olum my-app --tailwind";
 
@@ -113,7 +112,7 @@ export default function Hero() {
 
         {/* Subtitle */}
         <p className="animate-fade-up animate-fade-up-4 text-[clamp(1rem,2vw,1.2rem)] text-[var(--fg-2)] max-w-xl mx-auto leading-relaxed -mt-2">
-          Write HTML, CSS, and JavaScript. Build modern SPAs without leaving vanilla syntax.
+          The fastest way to turn ideas into apps for hackathons and experiments.
         </p>
 
         {/* CTA row */}

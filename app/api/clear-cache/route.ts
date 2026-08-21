@@ -2,9 +2,12 @@ import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { DOCS_TAG } from "@/lib/docs-content";
 import { PLAYGROUND_TAG, clearPlaygroundCache } from "@/lib/playground-examples.server";
+import { STARS_TAG } from "@/lib/github-stars";
+import { CONTRIBUTORS_TAG } from "@/lib/github-contributors";
 
 // GET /api/clear-cache
-// Invalidates the cached docs and playground examples so the next request
+// Invalidates the cached docs, playground examples and GitHub star count so the
+// next request
 // refetches them from GitHub.
 //
 // Guarded by the SAME secret as the analytics dashboard — the SECRET env var —
@@ -31,13 +34,15 @@ export async function GET(request: Request) {
   // the background on the next visit (recommended over the deprecated 1-arg form).
   revalidateTag(DOCS_TAG, "max");
   revalidateTag(PLAYGROUND_TAG, "max");
+  revalidateTag(STARS_TAG, "max");
+  revalidateTag(CONTRIBUTORS_TAG, "max");
   // The playground also keeps an in-process memo and an on-disk tree cache that
   // the fetch tag doesn't cover — drop those too.
   await clearPlaygroundCache();
 
   return NextResponse.json({
     revalidated: true,
-    tags: [DOCS_TAG, PLAYGROUND_TAG],
+    tags: [DOCS_TAG, PLAYGROUND_TAG, STARS_TAG, CONTRIBUTORS_TAG],
     now: new Date().toISOString(),
   });
 }

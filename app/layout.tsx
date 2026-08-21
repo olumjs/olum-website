@@ -6,6 +6,7 @@ import AnalyticsTracker from "@/components/AnalyticsTracker";
 import { getDocsNav } from "@/lib/docs-content";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { siteConfig } from "@/lib/site-config";
+import { getRepoStars } from "@/lib/github-stars";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -117,7 +118,7 @@ const structuredData = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const navGroups = await getDocsNav();
+  const [navGroups, githubStars] = await Promise.all([getDocsNav(), getRepoStars()]);
   return (
     <html
       lang="en"
@@ -139,7 +140,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="bg-[var(--bg)] text-[var(--fg)] antialiased min-h-screen">
         <ThemeProvider>
-          <Navbar navGroups={navGroups} />
+          <Navbar navGroups={navGroups} githubStars={githubStars} />
           {children}
           <AnalyticsTracker />
         </ThemeProvider>

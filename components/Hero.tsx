@@ -96,16 +96,10 @@ export default function Hero() {
         </div>
 
         {/* Badge */}
-        {/* <a
-          href="/blog"
-          className="animate-fade-up animate-fade-up-2 inline-flex items-center gap-2 text-xs font-mono font-semibold text-[#25C97E] bg-[rgba(37,201,126,0.07)] border border-[rgba(37,201,126,0.22)] px-3.5 py-1.5 rounded-full hover:bg-[rgba(37,201,126,0.12)] transition-colors"
-        >
+        <div className="animate-fade-up animate-fade-up-2 inline-flex items-center gap-2 text-xs font-mono font-semibold text-[#25C97E] bg-[rgba(37,201,126,0.07)] border border-[rgba(37,201,126,0.22)] px-3.5 py-1.5 rounded-full tracking-widest uppercase">
           <span className="w-1.5 h-1.5 rounded-full bg-[#25C97E] animate-pulse inline-block" />
-          Olum v2.0 is here — See what&apos;s new
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M2 6h8M7 3l3 3-3 3" />
-          </svg>
-        </a> */}
+          Reactive HTML
+        </div>
 
         {/* Headline */}
         <h1
@@ -119,7 +113,7 @@ export default function Hero() {
 
         {/* Subtitle */}
         <p className="animate-fade-up animate-fade-up-4 text-[clamp(1rem,2vw,1.2rem)] text-[var(--fg-2)] max-w-xl mx-auto leading-relaxed -mt-2">
-          The fastest way to turn ideas into apps for hackathons and experiments.
+          Write HTML, CSS, and JavaScript. Build modern SPAs without leaving vanilla syntax.
         </p>
 
         {/* CTA row */}

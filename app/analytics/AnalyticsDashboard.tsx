@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Footer from "@/components/Footer";
 
 // ─── Shared class fragments (olum design tokens) ────────────────────────────────
@@ -69,7 +69,14 @@ interface AnalyticsData {
   lastVisited?: string | null;
 }
 
-type DateRange = "all" | "24h" | "7d" | "30d" | "90d";
+type DateRange = "all" | "24h" | "7d" | "30d" | "90d" | "custom";
+
+// A user-picked window from the calendar. `start` is the first day at 00:00 and
+// `end` the last day at 23:59:59.999, so both endpoints are fully included.
+interface CustomRange {
+  start: number;
+  end: number;
+}
 
 const DATE_RANGE_OPTIONS: { value: DateRange; label: string }[] = [
   { value: "all", label: "All Time" },
@@ -77,6 +84,7 @@ const DATE_RANGE_OPTIONS: { value: DateRange; label: string }[] = [
   { value: "7d", label: "Last 7 Days" },
   { value: "30d", label: "Last 30 Days" },
   { value: "90d", label: "Last 90 Days" },
+  { value: "custom", label: "Custom Range…" },
 ];
 
 // What the special (non-hostname) referrer sources mean. Shown as hover hints.
@@ -148,15 +156,66 @@ function topEntry(rec?: Record<string, number>): [string, number] {
   return entries.sort(([, a], [, b]) => b - a)[0];
 }
 
-function getRangeStart(range: DateRange): number | null {
-  if (range === "all") return null;
+// ─── Calendar / date helpers ──────────────────────────────────────────────────
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
+const WEEKDAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function startOfDay(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function endOfDay(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+function sameDay(a: number, b: number): boolean {
+  return startOfDay(a) === startOfDay(b);
+}
+
+// "Mar 3, 2026" — short enough to fit two of them in the range button.
+function formatDay(ts: number): string {
+  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// The cells of one month grid: leading nulls pad the row to the first weekday,
+// then one timestamp (midnight, local) per day.
+function buildMonthCells(year: number, month: number): (number | null)[] {
+  const cells: (number | null)[] = Array(new Date(year, month, 1).getDay()).fill(null);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(year, month, day).getTime());
+  return cells;
+}
+
+function addMonths(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+// Both ends of the active window, in ms. `null` means unbounded on that side —
+// the presets are all open-ended at the top, only a custom range closes it.
+function getRangeBounds(range: DateRange, custom: CustomRange | null): { since: number | null; until: number | null } {
+  if (range === "custom") {
+    return custom ? { since: custom.start, until: custom.end } : { since: null, until: null };
+  }
+  if (range === "all") return { since: null, until: null };
   const ms: Record<string, number> = {
     "24h": 86_400_000,
     "7d": 7 * 86_400_000,
     "30d": 30 * 86_400_000,
     "90d": 90 * 86_400_000,
   };
-  return Date.now() - ms[range];
+  return { since: Date.now() - ms[range], until: null };
+}
+
+function inBounds(ts: number, since: number | null, until: number | null): boolean {
+  if (since !== null && ts < since) return false;
+  if (until !== null && ts > until) return false;
+  return true;
 }
 
 function computeFromVisits(visits: RecentVisit[]): AnalyticsData {
@@ -190,6 +249,184 @@ function computeFromVisits(visits: RecentVisit[]): AnalyticsData {
     recentVisits: visits,
     lastVisited: visits[0]?.ts ? new Date(visits[0].ts).toISOString() : null,
   };
+}
+
+// Two months side by side, click a day for the start and a second day for the
+// end. Days after today are disabled — there is nothing recorded there. Written
+// from scratch rather than pulling in a date library for one screen.
+function DateRangeCalendar({
+  value,
+  onApply,
+  onClear,
+  onClose,
+}: {
+  value: CustomRange | null;
+  onApply: (range: CustomRange) => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  // Pinned once on open — re-reading the clock during render is impure.
+  const [today] = useState(() => startOfDay(Date.now()));
+  const [leftMonth, setLeftMonth] = useState<Date>(() => {
+    const base = value ? new Date(value.start) : new Date();
+    return addMonths(new Date(base.getFullYear(), base.getMonth(), 1), -1);
+  });
+  const [start, setStart] = useState<number | null>(value ? startOfDay(value.start) : null);
+  const [end, setEnd] = useState<number | null>(value ? startOfDay(value.end) : null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape or a click outside the popover.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onDown = (e: MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [onClose]);
+
+  // First click sets the start, second click closes the range. Clicking before
+  // an open start moves the start instead of making a backwards range.
+  const pickDay = (day: number) => {
+    if (start === null || end !== null) {
+      setStart(day);
+      setEnd(null);
+    } else if (day < start) {
+      setStart(day);
+    } else {
+      setEnd(day);
+    }
+  };
+
+  // While only the start is picked, the hovered day previews the other end.
+  const previewEnd = end ?? (start !== null && hovered !== null && hovered > start ? hovered : null);
+
+  const isSelected = (day: number) =>
+    (start !== null && day === start) || (end !== null && day === end);
+
+  const isBetween = (day: number) =>
+    start !== null && previewEnd !== null && day > start && day < previewEnd;
+
+  const canApply = start !== null;
+
+  const renderMonth = (monthDate: Date) => {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    return (
+      <div key={`${year}-${month}`} className="w-[224px]">
+        <p className="text-center font-mono text-[11px] text-[var(--fg)] mb-2">
+          {MONTH_NAMES[month]} {year}
+        </p>
+        <div className="grid grid-cols-7 gap-y-0.5">
+          {WEEKDAY_NAMES.map((name) => (
+            <span key={name} className="text-center font-mono text-[9px] uppercase text-[var(--fg-muted)] py-1">
+              {name}
+            </span>
+          ))}
+          {buildMonthCells(year, month).map((day, i) => {
+            if (day === null) return <span key={`pad-${i}`} />;
+            const disabled = day > today;
+            const selected = isSelected(day);
+            const between = isBetween(day);
+            return (
+              <button
+                key={day}
+                type="button"
+                disabled={disabled}
+                onClick={() => pickDay(day)}
+                onMouseEnter={() => setHovered(day)}
+                onMouseLeave={() => setHovered(null)}
+                className={[
+                  "h-7 text-[11px] font-mono rounded-md transition-colors",
+                  disabled ? "text-[var(--fg-muted)] opacity-30 cursor-not-allowed" : "cursor-pointer",
+                  selected ? "bg-[var(--accent)] text-black font-semibold" : "",
+                  !selected && between ? "bg-[var(--surface-hover)] text-[var(--fg)]" : "",
+                  !selected && !between && !disabled ? "text-[var(--fg)] hover:bg-[var(--surface-hover)]" : "",
+                  !selected && !between && sameDay(day, today) ? "border border-[var(--border)]" : "",
+                ].join(" ")}
+              >
+                {new Date(day).getDate()}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div
+      ref={popRef}
+      role="dialog"
+      aria-label="Select a date range"
+      className={`absolute right-0 top-[calc(100%+8px)] z-50 p-4 shadow-xl ${CARD}`}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <button
+          type="button"
+          aria-label="Previous month"
+          onClick={() => setLeftMonth(addMonths(leftMonth, -1))}
+          className="rounded-md p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] transition-colors cursor-pointer"
+        >
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span className={SEC_LBL}>Select range</span>
+        <button
+          type="button"
+          aria-label="Next month"
+          onClick={() => setLeftMonth(addMonths(leftMonth, 1))}
+          className="rounded-md p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] transition-colors cursor-pointer"
+        >
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="flex gap-5 flex-wrap justify-center">
+        {renderMonth(leftMonth)}
+        {renderMonth(addMonths(leftMonth, 1))}
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-3 flex-wrap">
+        <p className="font-mono text-[11px] text-[var(--fg-muted)]">
+          {start === null
+            ? "Pick a start day"
+            : end === null
+              ? `${formatDay(start)} → pick an end day`
+              : `${formatDay(start)} → ${formatDay(end)}`}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] py-[6px] px-3 text-[.7rem] text-[var(--fg)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            disabled={!canApply}
+            onClick={() => {
+              if (start === null) return;
+              // A single-day pick means that whole day, not a zero-width window.
+              onApply({ start: startOfDay(start), end: endOfDay(end ?? start) });
+            }}
+            className="rounded-lg bg-[var(--accent)] py-[6px] px-3 text-[.7rem] font-semibold text-black hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -423,6 +660,8 @@ export default function AnalyticsDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [visitsSearch, setVisitsSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  const [customRange, setCustomRange] = useState<CustomRange | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [visitsFullscreen, setVisitsFullscreen] = useState(false);
   const [hideBots, setHideBots] = useState(true);
 
@@ -498,12 +737,13 @@ export default function AnalyticsDashboard() {
 
   const activeData = useMemo<AnalyticsData | null>(() => {
     if (!data) return null;
-    const since = getRangeStart(dateRange);
-    const visits = since
-      ? (data.recentVisits ?? []).filter((v) => v.ts >= since)
-      : (data.recentVisits ?? []);
+    const { since, until } = getRangeBounds(dateRange, customRange);
+    const all = data.recentVisits ?? [];
+    const visits = since === null && until === null
+      ? all
+      : all.filter((v) => inBounds(v.ts, since, until));
     return computeFromVisits(visits);
-  }, [data, dateRange]);
+  }, [data, dateRange, customRange]);
 
   const referrerCounts = useMemo<Record<string, number>>(() => {
     const counts: Record<string, number> = {};
@@ -520,9 +760,10 @@ export default function AnalyticsDashboard() {
   // the dashboard always describe the same period.
   const telemetryEvents = useMemo<TelemetryEvent[]>(() => {
     const events = telemetry?.events ?? [];
-    const since = getRangeStart(dateRange);
-    return since ? events.filter((e) => e.ts >= since) : events;
-  }, [telemetry, dateRange]);
+    const { since, until } = getRangeBounds(dateRange, customRange);
+    if (since === null && until === null) return events;
+    return events.filter((e) => inBounds(e.ts, since, until));
+  }, [telemetry, dateRange, customRange]);
 
   const telemetryBreakdown = useMemo(() => {
     const cliVersions: Record<string, number> = {};
@@ -578,9 +819,40 @@ export default function AnalyticsDashboard() {
   }, [activeData, hideBots]);
 
   // Change the range and reset the search so filtered results aren't confusing.
+  // "Custom Range" only opens the calendar — the range itself changes on Apply.
   const changeDateRange = (range: DateRange) => {
+    if (range === "custom") {
+      setCalendarOpen(true);
+      return;
+    }
     setDateRange(range);
+    setCustomRange(null);
     setVisitsSearch("");
+  };
+
+  const applyCustomRange = (range: CustomRange) => {
+    setCustomRange(range);
+    setDateRange("custom");
+    setVisitsSearch("");
+    setCalendarOpen(false);
+  };
+
+  // Clearing the calendar drops back to the widest view.
+  const clearCustomRange = () => {
+    setCustomRange(null);
+    setDateRange("all");
+    setVisitsSearch("");
+    setCalendarOpen(false);
+  };
+
+  // What the active range is called — a custom one names its two endpoints.
+  const rangeLabel = (range: DateRange): string => {
+    if (range === "custom") {
+      return customRange
+        ? `${formatDay(customRange.start)} – ${formatDay(customRange.end)}`
+        : "Custom Range";
+    }
+    return DATE_RANGE_OPTIONS.find((o) => o.value === range)?.label ?? "";
   };
 
   // Close fullscreen on Escape; lock page scroll while fullscreen
@@ -670,7 +942,9 @@ export default function AnalyticsDashboard() {
               className="appearance-none bg-[var(--surface)] border border-[var(--border)] text-[var(--fg)] text-[.75rem] py-[8px] pl-3 pr-8 rounded-lg focus:outline-none focus:border-[var(--accent)] cursor-pointer"
             >
               {DATE_RANGE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>
+                  {opt.value === "custom" ? rangeLabel("custom") : opt.label}
+                </option>
               ))}
             </select>
             <svg
@@ -679,6 +953,35 @@ export default function AnalyticsDashboard() {
             >
               <path d="M6 9l6 6 6-6" />
             </svg>
+          </div>
+
+          {/* Calendar range picker — sits beside the presets and overrides them. */}
+          <div className="relative">
+            <button
+              onClick={() => setCalendarOpen((open) => !open)}
+              aria-haspopup="dialog"
+              aria-expanded={calendarOpen}
+              title="Pick a custom date range"
+              className={`flex items-center gap-2 rounded-lg border py-[8px] px-3 text-[.75rem] transition-colors cursor-pointer ${
+                dateRange === "custom"
+                  ? "border-[var(--accent)] bg-[var(--surface)] text-[var(--accent)]"
+                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+              }`}
+            >
+              <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+              {dateRange === "custom" && customRange ? rangeLabel("custom") : "Custom"}
+            </button>
+            {calendarOpen && (
+              <DateRangeCalendar
+                value={customRange}
+                onApply={applyCustomRange}
+                onClear={clearCustomRange}
+                onClose={() => setCalendarOpen(false)}
+              />
+            )}
           </div>
           <button
             onClick={refresh}
@@ -735,7 +1038,7 @@ export default function AnalyticsDashboard() {
             <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
           </svg>
           <p className="font-mono text-[11px] text-[var(--fg-muted)]">
-            No visits recorded for <span className="text-[var(--fg)]">{DATE_RANGE_OPTIONS.find(o => o.value === dateRange)?.label}</span>.
+            No visits recorded for <span className="text-[var(--fg)]">{rangeLabel(dateRange)}</span>.
           </p>
         </div>
       )}

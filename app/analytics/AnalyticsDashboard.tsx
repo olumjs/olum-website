@@ -756,14 +756,14 @@ export default function AnalyticsDashboard() {
     return counts;
   }, [activeData]);
 
-  // Telemetry honours the same date range as the visit data, so both halves of
-  // the dashboard always describe the same period.
-  const telemetryEvents = useMemo<TelemetryEvent[]>(() => {
-    const events = telemetry?.events ?? [];
-    const { since, until } = getRangeBounds(dateRange, customRange);
-    if (since === null && until === null) return events;
-    return events.filter((e) => inBounds(e.ts, since, until));
-  }, [telemetry, dateRange, customRange]);
+  // Deliberately NOT filtered by the date range: the Olum Users section always
+  // reports the whole telemetry log from Firebase. CLI pings are sparse compared
+  // with site visits, so windowing them mostly produces empty panels — the
+  // lifetime totals are the useful number here.
+  const telemetryEvents = useMemo<TelemetryEvent[]>(
+    () => telemetry?.events ?? [],
+    [telemetry],
+  );
 
   const telemetryBreakdown = useMemo(() => {
     const cliVersions: Record<string, number> = {};
@@ -1239,6 +1239,10 @@ export default function AnalyticsDashboard() {
       <div className="mt-12">
         <div className="flex items-center gap-2 mb-4">
           <h2 className="text-[var(--fg)] font-bold text-lg tracking-tight">Olum Users</h2>
+          {/* stated on the surface, so nobody reads these numbers as range-filtered */}
+          <span className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)]">
+            All time
+          </span>
           <Hint
             content={
               <div className="flex flex-col gap-2 py-0.5 text-left leading-[1.5]">
@@ -1248,6 +1252,10 @@ export default function AnalyticsDashboard() {
                 </div>
                 <div className="opacity-80">
                   Treat the total as usage volume, not a headcount.
+                </div>
+                <div className="opacity-80">
+                  This section always shows all time — the date range above applies to site
+                  visits only.
                 </div>
               </div>
             }

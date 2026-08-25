@@ -562,6 +562,28 @@ function BarChart({
   );
 }
 
+// Expand/collapse control shared by the visits and pings tables.
+function FullscreenToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      title={on ? "Exit fullscreen" : "Fullscreen"}
+      aria-label={on ? "Exit fullscreen" : "Fullscreen"}
+      className="shrink-0 p-1.5 rounded-md hover:bg-[var(--surface-hover)] text-[var(--fg-muted)] hover:text-[var(--fg)] transition-colors cursor-pointer"
+    >
+      {on ? (
+        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function Panel({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className={`${CARD} p-6`}>
@@ -602,6 +624,124 @@ function ReferrerLegend() {
         </svg>
       </button>
     </Hint>
+  );
+}
+
+// Excludes chosen timezones from the whole dashboard — for dropping your own
+// zone so your own visits and CLI pings don't skew the numbers. Applies to the
+// site-visit stats, every chart, the visits table and the Olum Users section.
+function TimezoneFilter({
+  counts,
+  excluded,
+  onToggle,
+  onClear,
+}: {
+  counts: Record<string, number>;
+  excluded: string[];
+  onToggle: (tz: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on Escape or a click outside the popover.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [open]);
+
+  // Busiest zone first, so the one worth excluding is usually at the top. An
+  // excluded zone stays listed even when the range holds none of it, otherwise
+  // the row needed to un-exclude it would disappear.
+  const zones = [...new Set([...Object.keys(counts), ...excluded])]
+    .sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b));
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={excluded.length ? `Excluded everywhere: ${excluded.join(", ")}` : "Exclude timezones from the whole dashboard"}
+        className={`flex items-center gap-2 rounded-lg border py-[8px] px-3 text-[.75rem] transition-colors cursor-pointer ${
+          excluded.length
+            ? "border-[var(--accent)] bg-[var(--surface)] text-[var(--accent)]"
+            : "border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+        }`}
+      >
+        <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20" />
+        </svg>
+        {excluded.length ? `Timezones (${excluded.length})` : "Timezones"}
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Exclude timezones"
+          className={`absolute right-0 top-[calc(100%+8px)] z-50 w-[260px] p-3 shadow-xl ${CARD}`}
+        >
+          <div className="flex items-center justify-between mb-2.5">
+            <span className={SEC_LBL}>Exclude everywhere</span>
+            {!!excluded.length && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="font-mono text-[10px] text-[var(--fg-muted)] hover:text-[var(--fg)] transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {!zones.length ? (
+            <p className="font-mono text-[11px] text-[var(--fg-muted)] opacity-50 py-2">No timezones yet</p>
+          ) : (
+            <div className="max-h-[240px] overflow-y-auto flex flex-col gap-0.5">
+              {zones.map((tz) => {
+                const off = excluded.includes(tz);
+                return (
+                  <button
+                    key={tz}
+                    type="button"
+                    onClick={() => onToggle(tz)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+                  >
+                    <span
+                      className={`w-3.5 h-3.5 shrink-0 rounded-[4px] border flex items-center justify-center ${
+                        off ? "bg-[var(--accent)] border-[var(--accent)]" : "border-[var(--border)]"
+                      }`}
+                    >
+                      {off && (
+                        <svg width="9" height="9" fill="none" stroke="black" strokeWidth="3" viewBox="0 0 24 24">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={`font-mono text-[11px] truncate ${off ? "text-[var(--fg-muted)] line-through" : "text-[var(--fg)]"}`} title={tz}>
+                      {tz}
+                    </span>
+                    <span className="ml-auto font-mono text-[10px] text-[var(--fg-muted)] opacity-60 shrink-0">
+                      {counts[tz] ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -692,9 +832,36 @@ export default function AnalyticsDashboard() {
   const [customRange, setCustomRange] = useState<CustomRange | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [visitsFullscreen, setVisitsFullscreen] = useState(false);
+  const [telemetryFullscreen, setTelemetryFullscreen] = useState(false);
   const [hideBots, setHideBots] = useState(true);
+  // Timezones hidden from the Recent Visits table. Kept in localStorage so the
+  // choice survives a reload — it is a view preference, not part of the data.
+  const [excludedTimezones, setExcludedTimezones] = useState<string[]>(() => {
+    // Read once, lazily. Never during the server render — the dashboard shows
+    // the spinner then, so the first client render can't mismatch.
+    if (typeof window === "undefined") return [];
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("a_tz_excluded") ?? "[]");
+      return Array.isArray(saved) ? saved.filter((t): t is string => typeof t === "string") : [];
+    } catch {
+      return []; // corrupt or unavailable storage — start with nothing excluded
+    }
+  });
   // Off: every ping counts. On: pings that share a user fingerprint count once.
-  const [uniqueUsers, setUniqueUsers] = useState(false);
+  const [uniqueUsers, setUniqueUsers] = useState(true);
+
+  const toggleTimezone = useCallback((tz: string) => {
+    setExcludedTimezones((prev) => {
+      const next = prev.includes(tz) ? prev.filter((t) => t !== tz) : [...prev, tz];
+      try { localStorage.setItem("a_tz_excluded", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const clearTimezones = useCallback(() => {
+    setExcludedTimezones([]);
+    try { localStorage.removeItem("a_tz_excluded"); } catch { /* ignore */ }
+  }, []);
 
   // Auto-login from session storage
   useEffect(() => {
@@ -766,15 +933,24 @@ export default function AnalyticsDashboard() {
     fetchTelemetry(pw).then(setTelemetry);
   };
 
+  // Visits inside the active date window, before the timezone filter — this is
+  // what the timezone picker counts, so an excluded zone still shows its size.
+  const rangeVisits = useMemo<RecentVisit[]>(() => {
+    const { since, until } = getRangeBounds(dateRange, customRange);
+    const all = data?.recentVisits ?? [];
+    return since === null && until === null ? all : all.filter((v) => inBounds(v.ts, since, until));
+  }, [data, dateRange, customRange]);
+
+  // Everything downstream — stat cards, charts, referrers, the visits table —
+  // reads this, so excluding a zone removes it from the whole dashboard rather
+  // than only hiding rows.
   const activeData = useMemo<AnalyticsData | null>(() => {
     if (!data) return null;
-    const { since, until } = getRangeBounds(dateRange, customRange);
-    const all = data.recentVisits ?? [];
-    const visits = since === null && until === null
-      ? all
-      : all.filter((v) => inBounds(v.ts, since, until));
+    const visits = excludedTimezones.length
+      ? rangeVisits.filter((v) => !excludedTimezones.includes(v.timezone || "unknown"))
+      : rangeVisits;
     return computeFromVisits(visits);
-  }, [data, dateRange, customRange]);
+  }, [data, rangeVisits, excludedTimezones]);
 
   const referrerCounts = useMemo<Record<string, number>>(() => {
     const counts: Record<string, number> = {};
@@ -787,14 +963,23 @@ export default function AnalyticsDashboard() {
     return counts;
   }, [activeData]);
 
-  // Deliberately NOT filtered by the date range: the Olum Users section always
-  // reports the whole telemetry log from Firebase. CLI pings are sparse compared
-  // with site visits, so windowing them mostly produces empty panels — the
-  // lifetime totals are the useful number here.
-  const telemetryEvents = useMemo<TelemetryEvent[]>(
-    () => telemetry?.events ?? [],
-    [telemetry],
-  );
+  // Pings inside the active date window, before the timezone filter — the
+  // telemetry half of what the timezone picker counts. Windowed on `ts`, the
+  // time we received the ping, not the machine clock the CLI reported: the
+  // reported one is unverifiable and skewed by wrong local clocks.
+  const rangeTelemetry = useMemo<TelemetryEvent[]>(() => {
+    const { since, until } = getRangeBounds(dateRange, customRange);
+    const all = telemetry?.events ?? [];
+    return since === null && until === null ? all : all.filter((e) => inBounds(e.ts, since, until));
+  }, [telemetry, dateRange, customRange]);
+
+  // What the whole Olum Users section reads: the date range and the timezone
+  // exclusions both apply, the same way they do to site visits above.
+  const telemetryEvents = useMemo<TelemetryEvent[]>(() => {
+    return excludedTimezones.length
+      ? rangeTelemetry.filter((e) => !excludedTimezones.includes(e.timezone || "unknown"))
+      : rangeTelemetry;
+  }, [rangeTelemetry, excludedTimezones]);
 
   // Rows of the Recent list: one per ping, or one per user when the toggle is on.
   const visibleTelemetry = useMemo<TelemetryEvent[]>(
@@ -875,7 +1060,24 @@ export default function AnalyticsDashboard() {
   // What one counted thing is called in the Olum Users section.
   const telemetryUnit = uniqueUsers ? "users" : "pings";
 
+  // Every timezone the dashboard knows about, with what excluding it would cost:
+  // site visits plus CLI pings in the active range. Counted before the filter
+  // runs, so the numbers don't collapse to zero once a zone is excluded.
+  const timezoneCounts = useMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    for (const v of rangeVisits) {
+      const tz = v.timezone || "unknown";
+      counts[tz] = (counts[tz] ?? 0) + 1;
+    }
+    for (const e of rangeTelemetry) {
+      const tz = e.timezone || "unknown";
+      counts[tz] = (counts[tz] ?? 0) + 1;
+    }
+    return counts;
+  }, [rangeVisits, rangeTelemetry]);
+
   // Visits to show in the table — every visit, minus bots when that filter is on.
+  // Excluded timezones are already gone: activeData never carried them.
   const visibleVisits = useMemo<RecentVisit[]>(() => {
     const visits = activeData?.recentVisits ?? [];
     return hideBots ? visits.filter((v) => !isBotVisit(v)) : visits;
@@ -918,17 +1120,22 @@ export default function AnalyticsDashboard() {
     return DATE_RANGE_OPTIONS.find((o) => o.value === range)?.label ?? "";
   };
 
-  // Close fullscreen on Escape; lock page scroll while fullscreen
+  // Close fullscreen on Escape; lock page scroll while either table is expanded.
+  const anyFullscreen = visitsFullscreen || telemetryFullscreen;
   useEffect(() => {
-    if (!visitsFullscreen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setVisitsFullscreen(false); };
+    if (!anyFullscreen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setVisitsFullscreen(false);
+      setTelemetryFullscreen(false);
+    };
     window.addEventListener("keydown", handler);
     document.documentElement.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", handler);
       document.documentElement.style.overflow = "";
     };
-  }, [visitsFullscreen]);
+  }, [anyFullscreen]);
 
   const wrap = (content: React.ReactNode) => (
     <>
@@ -1046,6 +1253,15 @@ export default function AnalyticsDashboard() {
               />
             )}
           </div>
+
+          {/* Global timezone exclusions — sits with the date controls because it
+              filters the whole page the same way the range does. */}
+          <TimezoneFilter
+            counts={timezoneCounts}
+            excluded={excludedTimezones}
+            onToggle={toggleTimezone}
+            onClear={clearTimezones}
+          />
           <button
             onClick={refresh}
             disabled={refreshing}
@@ -1207,21 +1423,7 @@ export default function AnalyticsDashboard() {
                 {visibleVisits.length} entries
               </span>
             )}
-            <button
-              onClick={() => setVisitsFullscreen((v) => !v)}
-              title={visitsFullscreen ? "Exit fullscreen" : "Fullscreen"}
-              className="shrink-0 p-1.5 rounded-md hover:bg-[var(--surface-hover)] text-[var(--fg-muted)] hover:text-[var(--fg)] transition-colors"
-            >
-              {visitsFullscreen ? (
-                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-                </svg>
-              )}
-            </button>
+            <FullscreenToggle on={visitsFullscreen} onToggle={() => setVisitsFullscreen((v) => !v)} />
           </div>
         </div>
 
@@ -1298,13 +1500,22 @@ export default function AnalyticsDashboard() {
         </div>
       </div>
 
+      {/* Hard break between the two halves of the page: everything above is the
+          website, everything below is the CLI. Different source, different data. */}
+      <div className="mt-14 mb-2 flex items-center gap-4" role="separator" aria-label="CLI telemetry">
+        <span className="h-px flex-1 bg-[var(--border)]" />
+        <span className={`${SEC_LBL} shrink-0`}>CLI Telemetry</span>
+        <span className="h-px flex-1 bg-[var(--border)]" />
+      </div>
+
       {/* ── Olum CLI telemetry ── */}
-      <div className="mt-12">
+      <div className="mt-8">
         <div className="flex items-center gap-2 mb-4">
           <h2 className="text-[var(--fg)] font-bold text-lg tracking-tight">Olum Users</h2>
-          {/* stated on the surface, so nobody reads these numbers as range-filtered */}
+          {/* names the window these numbers cover, so nobody reads a filtered
+              total as the lifetime one */}
           <span className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)]">
-            All time
+            {rangeLabel(dateRange)}
           </span>
           <Hint
             content={
@@ -1323,8 +1534,10 @@ export default function AnalyticsDashboard() {
                   way look identical.
                 </div>
                 <div className="opacity-80">
-                  This section always shows all time — the date range above applies to site
-                  visits only.
+                  The date range and the excluded timezones above both apply here. Pings are
+                  windowed by when we received them, not by the clock on the sending machine.
+                  CLI pings are sparser than site visits, so a short range can leave this
+                  section empty.
                 </div>
               </div>
             }
@@ -1355,6 +1568,19 @@ export default function AnalyticsDashboard() {
             Unique
           </button>
         </div>
+
+        {/* Same note as the visits table gets: an empty section is far more often
+            a narrow range than a dead CLI. */}
+        {!telemetryEvents.length && dateRange !== "all" && (
+          <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 flex items-center gap-3">
+            <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" className="text-[var(--fg-muted)] shrink-0">
+              <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
+            </svg>
+            <p className="font-mono text-[11px] text-[var(--fg-muted)]">
+              No CLI pings received in <span className="text-[var(--fg)]">{rangeLabel(dateRange)}</span>.
+            </p>
+          </div>
+        )}
 
         {/* the three headline numbers: projects scaffolded, flags used, components installed */}
         <div className="flex gap-3 flex-wrap mb-3">
@@ -1458,8 +1684,12 @@ export default function AnalyticsDashboard() {
         </div>
 
 
-        <div className={`${CARD} overflow-hidden`}>
-          <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap">
+        <div className={
+          telemetryFullscreen
+            ? "fixed inset-x-0 bottom-0 top-[60px] z-40 flex flex-col bg-[var(--bg)]"
+            : `${CARD} overflow-hidden`
+        }>
+          <div className={`px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap ${telemetryFullscreen ? "shrink-0" : ""}`}>
             <p className={SEC_LBL}>{uniqueUsers ? "Unique Users" : "Recent Pings"}</p>
             <div className="flex items-center gap-3">
               {!!visibleTelemetry.length && (
@@ -1467,10 +1697,11 @@ export default function AnalyticsDashboard() {
                   {visibleTelemetry.length} entries
                 </span>
               )}
+              <FullscreenToggle on={telemetryFullscreen} onToggle={() => setTelemetryFullscreen((v) => !v)} />
             </div>
           </div>
 
-          <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
+          <div className={`overflow-x-auto overflow-y-auto ${telemetryFullscreen ? "flex-1" : "max-h-[420px]"}`}>
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">

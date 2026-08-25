@@ -37,8 +37,8 @@ interface TelemetryEvent {
   timezone?: string;
   // absent on pings from CLI versions that predate the field
   type?: string;
-  // the command's argument, `add` only — an olum-ui component. `create` project
-  // names are the user's own wording and are deliberately never collected
+  // the command's argument: the olum-ui component `add` installed, or the name given
+  // to `create`. Absent on pings from CLI versions that predate the field
   name?: string;
   // flags the command ran with, `create` only
   options?: string[];
@@ -813,9 +813,11 @@ export default function AnalyticsDashboard() {
     const osCounts: Record<string, Set<string>> = {};
     const timezoneCounts: Record<string, Set<string>> = {};
     const typeCounts: Record<string, Set<string>> = {};
-    // only `add` carries a name — it's an olum-ui component. Project names are
-    // deliberately not collected, so `create` contributes its count and nothing else
+    // both commands carry a name, and the two mean different things — an olum-ui
+    // component for `add`, the project's own name for `create` — so they are counted
+    // apart rather than mixed into one list of labels
     const components: Record<string, Set<string>> = {};
+    const projects: Record<string, Set<string>> = {};
     const optionCounts: Record<string, Set<string>> = {};
     const users = new Set<string>();
 
@@ -837,6 +839,7 @@ export default function AnalyticsDashboard() {
       bump(typeCounts, type, id);
 
       if (e.name && type === "add") bump(components, e.name, id);
+      if (e.name && type === "create") bump(projects, e.name, id);
 
       for (const flag of e.options ?? []) bump(optionCounts, flag, id);
     }
@@ -846,6 +849,7 @@ export default function AnalyticsDashboard() {
 
     const typeSizes = sizes(typeCounts);
     const componentSizes = sizes(components);
+    const projectSizes = sizes(projects);
     const optionSizes = sizes(optionCounts);
 
     return {
@@ -857,6 +861,7 @@ export default function AnalyticsDashboard() {
       timezoneCounts: sizes(timezoneCounts),
       typeCounts: typeSizes,
       components: componentSizes,
+      projects: projectSizes,
       optionCounts: optionSizes,
       optionsUsed: Object.values(optionSizes).reduce((a, b) => a + b, 0),
       // pings by default — the same machine running the command twice counts
@@ -1441,7 +1446,12 @@ export default function AnalyticsDashboard() {
           </Panel>
         </div>
 
-        <div className="mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          {/* the name given to `olum create`, kebab-cased by the CLI so the same
+              project counts once however it was typed */}
+          <Panel title="Project Names">
+            <BarChart data={telemetryBreakdown.projects} maxItems={10} />
+          </Panel>
           <Panel title="Timezones">
             <BarChart data={telemetryBreakdown.timezoneCounts} maxItems={10} />
           </Panel>

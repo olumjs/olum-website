@@ -58,16 +58,13 @@ function parseType(value: unknown): string {
   return SLUG.test(type) ? type : "unknown";
 }
 
-// The argument the command was given. Only recorded for commands whose argument
-// names something of ours — an olum-ui component for `add`. A `create` argument is
-// the user's own project name, which can identify a person or an unreleased product,
-// so it is dropped here as well as in the CLI: enforcing it at the point of storage
-// means no client, old or modified, can put one in the log.
-const NAMELESS_TYPES = ["create"];
+// The argument the command was given — the olum-ui component `add` installed, or the
+// project `create` scaffolded. Recorded for every command, so the log says what was
+// built and not only that something was. The value is free-form user input that ends
+// up on the dashboard as a label, so it is stripped to printable characters and capped.
 const MAX_NAME_LEN = 64;
 
-function parseName(value: unknown, type: string): string | null {
-  if (NAMELESS_TYPES.includes(type)) return null;
+function parseName(value: unknown): string | null {
   if (typeof value !== "string") return null;
   // charCode filter rather than a regex, so no control-character escape is needed
   const printable = Array.from(value)
@@ -149,8 +146,9 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/telemetry
-// Records one anonymous usage ping from the Olum CLI. No IPs, project names or
-// other identifying data are collected or stored.
+// Records one anonymous usage ping from the Olum CLI. No IPs, paths or other
+// identifying data are collected or stored — only the command, its argument
+// (the component added or the project name given to `create`) and its flags.
 export async function POST(req: NextRequest) {
   // Checked before the body is read so a flood costs one database op, not a
   // parse and a write.
@@ -195,7 +193,7 @@ export async function POST(req: NextRequest) {
   }
 
   const command = parseType(type);
-  const label = parseName(name, command);
+  const label = parseName(name);
   const flags = parseOptions(options);
 
   try {

@@ -1,13 +1,113 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Footer from "@/components/Footer";
-import { posts, getFeatured, getAllTags, formatDate } from "@/lib/blog-posts";
+import {
+  posts,
+  getFeatured,
+  getAllTags,
+  formatDate,
+  postsByDate,
+  postDescription,
+} from "@/lib/blog-posts";
 import { getAllBlogViews } from "@/lib/analytics";
 import BlogViews from "@/components/BlogViews";
-
-export const metadata: Metadata = { title: "Blog" };
+import { siteConfig } from "@/lib/site-config";
 
 type Props = { searchParams: Promise<{ tag?: string }> };
+
+const BLOG_URL = `${siteConfig.url}/blog`;
+const BLOG_TITLE = `Blog — ${siteConfig.name}`;
+const BLOG_DESCRIPTION =
+  "Framework updates, tutorials, migration stories, and deep dives from the OlumJS team and community.";
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const { tag } = await searchParams;
+  const activeTag = tag?.trim() || null;
+
+  // ?tag= views are thin slices of the same list, so they stay out of the index
+  // and point their canonical at the unfiltered page — one URL collects all the
+  // ranking signals, and crawlers still follow the links out to each post.
+  if (activeTag) {
+    const title = `Posts tagged “${activeTag}” — ${siteConfig.name} Blog`;
+    const description = `Every OlumJS article tagged ${activeTag} — tutorials, release notes, and deep dives.`;
+    return {
+      title: { absolute: title },
+      description,
+      alternates: { canonical: BLOG_URL },
+      robots: { index: false, follow: true },
+      openGraph: {
+        type: "website",
+        url: BLOG_URL,
+        title,
+        description,
+        siteName: siteConfig.name,
+        locale: siteConfig.locale,
+      },
+      twitter: { card: "summary_large_image", title, description },
+    };
+  }
+
+  return {
+    title: { absolute: BLOG_TITLE },
+    description: BLOG_DESCRIPTION,
+    keywords: [
+      ...getAllTags(),
+      "OlumJS blog",
+      "JavaScript framework blog",
+      "frontend tutorials",
+      "web development articles",
+    ],
+    alternates: { canonical: BLOG_URL },
+    openGraph: {
+      type: "website",
+      url: BLOG_URL,
+      title: BLOG_TITLE,
+      description: BLOG_DESCRIPTION,
+      siteName: siteConfig.name,
+      locale: siteConfig.locale,
+    },
+    twitter: { card: "summary_large_image", title: BLOG_TITLE, description: BLOG_DESCRIPTION },
+  };
+}
+
+// Blog + ItemList JSON-LD: declares the /blog#blog entity every post links back
+// to, and hands search engines the newest posts as an ordered list.
+function blogStructuredData() {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Blog",
+        "@id": `${BLOG_URL}#blog`,
+        name: `${siteConfig.name} Blog`,
+        url: BLOG_URL,
+        description: BLOG_DESCRIPTION,
+        inLanguage: "en",
+        publisher: { "@id": `${siteConfig.url}/#organization` },
+        isPartOf: { "@id": `${siteConfig.url}/#website` },
+        blogPost: postsByDate().map((post) => ({
+          "@type": "BlogPosting",
+          "@id": `${BLOG_URL}/${post.slug}#post`,
+          headline: post.title,
+          description: postDescription(post, 300),
+          url: `${BLOG_URL}/${post.slug}`,
+          datePublished: post.publishedAt,
+          dateModified: post.updatedAt ?? post.publishedAt,
+          keywords: post.tags.join(", "),
+          author: { "@type": "Person", name: post.author.name },
+        })),
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${BLOG_URL}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: siteConfig.url },
+          { "@type": "ListItem", position: 2, name: "Blog", item: BLOG_URL },
+        ],
+      },
+    ],
+  };
+}
 
 export default async function BlogPage({ searchParams }: Props) {
   const { tag } = await searchParams;
@@ -26,6 +126,14 @@ export default async function BlogPage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
+      {/* JSON-LD: Blog listing + breadcrumb */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(blogStructuredData()).replace(/</g, "\\u003c"),
+        }}
+      />
+
       {/* Hero header */}
       <section className="relative pt-32 pb-16 overflow-hidden">
         <div className="absolute inset-0 bg-dot-grid opacity-40" />

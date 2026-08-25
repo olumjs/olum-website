@@ -4,9 +4,18 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
-import { getPost, getAllSlugs, formatDate } from "@/lib/blog-posts";
+import {
+  getPost,
+  getAllSlugs,
+  formatDate,
+  readingTimeISO,
+  wordCount,
+  postDescription,
+} from "@/lib/blog-posts";
+import type { Post } from "@/lib/blog-posts";
 import { getBlogViewsBySlug } from "@/lib/analytics";
 import BlogViews from "@/components/BlogViews";
+import { siteConfig } from "@/lib/site-config";
 
 // Re-render at most once a minute so the view count stays fresh without
 // making the (otherwise static) post pages dynamic.
@@ -23,8 +32,91 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const post = getPost(slug);
-  if (!post) return {};
-  return { title: post.title, description: post.description };
+  if (!post) return { title: "Post not found", robots: { index: false, follow: true } };
+
+  const title = `${post.title} — ${siteConfig.name} Blog`;
+  // Trimmed to fit a search snippet, and falling back to the post's opening
+  // prose when it has no description of its own. The full text still shows on
+  // the page itself.
+  const description = postDescription(post) || siteConfig.shortDescription;
+  const canonical = `${siteConfig.url}/blog/${post.slug}`;
+
+  return {
+    title: { absolute: title },
+    description,
+    keywords: [...post.tags, siteConfig.name, "JavaScript", "web development"],
+    authors: [{ name: post.author.name }],
+    alternates: { canonical },
+    openGraph: {
+      type: "article",
+      url: canonical,
+      title,
+      description,
+      siteName: siteConfig.name,
+      locale: siteConfig.locale,
+      publishedTime: isoDateTime(post.publishedAt),
+      modifiedTime: isoDateTime(post.updatedAt ?? post.publishedAt),
+      authors: [post.author.name],
+      section: post.tags[0],
+      tags: post.tags,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
+  };
+}
+
+// Stored dates are plain "yyyy-mm-dd"; OG article tags and JSON-LD both want a
+// full ISO timestamp, so midnight UTC is assumed.
+function isoDateTime(date: string): string {
+  return new Date(`${date}T00:00:00.000Z`).toISOString();
+}
+
+// Article-level JSON-LD. The post is tied back to the site-wide Organization
+// and WebSite entities declared in the root layout via their @id, and the
+// breadcrumb gives search results the Home › Blog › Post trail.
+function postStructuredData(post: Post) {
+  const url = `${siteConfig.url}/blog/${post.slug}`;
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BlogPosting",
+        "@id": `${url}#post`,
+        headline: post.title,
+        description: postDescription(post, 300),
+        url,
+        mainEntityOfPage: { "@type": "WebPage", "@id": url },
+        datePublished: isoDateTime(post.publishedAt),
+        dateModified: isoDateTime(post.updatedAt ?? post.publishedAt),
+        image: `${url}/opengraph-image`,
+        inLanguage: "en",
+        keywords: post.tags.join(", "),
+        articleSection: post.tags[0],
+        wordCount: wordCount(post),
+        timeRequired: readingTimeISO(post.readingTime),
+        author: {
+          "@type": "Person",
+          name: post.author.name,
+          jobTitle: post.author.role,
+          url: siteConfig.url,
+        },
+        publisher: { "@id": `${siteConfig.url}/#organization` },
+        isPartOf: { "@id": `${siteConfig.url}/blog#blog` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${url}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: siteConfig.url },
+          { "@type": "ListItem", position: 2, name: "Blog", item: `${siteConfig.url}/blog` },
+          { "@type": "ListItem", position: 3, name: post.title, item: url },
+        ],
+      },
+    ],
+  };
 }
 
 // ── Body rendering ────────────────────────────────────────────────────────────
@@ -111,6 +203,14 @@ export default async function BlogPostPage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
+      {/* JSON-LD: BlogPosting + breadcrumb for rich results */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(postStructuredData(post)).replace(/</g, "\\u003c"),
+        }}
+      />
+
       {/* Hero */}
       <section className="relative pt-28 pb-12 overflow-hidden">
         <div className="absolute inset-0 bg-dot-grid opacity-30" />

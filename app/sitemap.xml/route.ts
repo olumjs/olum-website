@@ -2,7 +2,7 @@ import { siteConfig } from "@/lib/site-config";
 import { getDocOrder, getDocDates } from "@/lib/docs-content";
 import { getPlaygroundGroups } from "@/lib/playground-examples.server";
 import { flattenExamples } from "@/lib/playground-examples";
-import { getAllSlugs } from "@/lib/blog-posts";
+import { postsByDate } from "@/lib/blog-posts";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -13,6 +13,7 @@ export async function GET() {
     getPlaygroundGroups(),
   ]);
   const playgroundExamples = flattenExamples(playgroundGroups);
+  const blogPosts = postsByDate();
   const staticRoutes = [
     // Home reflects the freshest doc change, falling back to the build date.
     {
@@ -29,17 +30,19 @@ export async function GET() {
       priority: i === 0 ? "0.9" : "0.7",
       lastmod: today,
     })),
+    // The listing is as fresh as its newest post; each post reports its own
+    // publish/update date so crawlers only re-fetch what actually changed.
     {
       url: `${siteConfig.url}/blog`,
       changefreq: "weekly",
       priority: "0.8",
-      lastmod: today,
+      lastmod: blogPosts[0]?.publishedAt ?? today,
     },
-    ...getAllSlugs().map((slug) => ({
-      url: `${siteConfig.url}/blog/${slug}`,
+    ...blogPosts.map((post) => ({
+      url: `${siteConfig.url}/blog/${post.slug}`,
       changefreq: "monthly",
       priority: "0.7",
-      lastmod: today,
+      lastmod: post.updatedAt ?? post.publishedAt,
     })),
   ];
 

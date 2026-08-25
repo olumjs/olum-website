@@ -38,6 +38,18 @@ function parseOS(value: unknown): string | null {
   return SLUG.test(named) ? named : null;
 }
 
+// IANA zone name, "Africa/Cairo". Optional: CLIs before 0.6.6 never sent one, and a
+// stripped-down machine can't resolve it. The database rejects an undefined value
+// outright, so a missing or malformed zone has to become a string here — without this
+// every ping from an older CLI failed the write and was lost.
+const TIMEZONE = /^[A-Za-z0-9][A-Za-z0-9/_+-]{0,63}$/;
+
+function parseTimezone(value: unknown): string {
+  if (typeof value !== "string") return "unknown";
+  const zone = value.trim();
+  return TIMEZONE.test(zone) ? zone : "unknown";
+}
+
 // Which command produced the ping — "create", "add", and whatever comes next.
 // Optional, so pings from CLI versions predating this field still record.
 function parseType(value: unknown): string {
@@ -87,6 +99,20 @@ function parseTimestamp(value: unknown): string {
   const date =
     typeof value === "number" ? new Date(value) : typeof value === "string" ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toISOString() : new Date().toISOString();
+}
+
+// The database refuses an `undefined` value: the whole write throws and the ping is
+// lost. Every field above is parsed into a real value, but a field added later can
+// reintroduce one, and a dropped ping is silent on both ends — the CLI never shows the
+// status. Dropping the key instead records the rest of the event, which is always worth
+// more than nothing. Shallow by design: the payload is flat apart from `options`, an
+// array of strings the parser has already filtered.
+function defined<T extends Record<string, unknown>>(event: T): T {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(event)) {
+    if (event[key] !== undefined) out[key] = event[key];
+  }
+  return out as T;
 }
 
 // GET /api/telemetry?secret=<secret>
@@ -175,27 +201,29 @@ export async function POST(req: NextRequest) {
   try {
     await db.ref(TELEMETRY_COL).update({ lastReceived: new Date().toISOString() });
 
-    await db.ref(`${TELEMETRY_COL}/events`).push({
-      cliVersion: cli,
-      olumVersion: olum,
-      // stored exactly as the CLI reported it — the full runtime version, e.g.
-      // "24.15.0". Deliberately not parsed or format-checked, so an unusual build
-      // (nightly, rc, a vendor fork) records as-is instead of being rejected.
-      // `nodeMajor` is the key CLIs used before the rename; `null` when neither is
-      // present, since the database refuses an undefined value.
-      nodeVersion: nodeVersion ?? nodeMajor ?? null,
-      // the app's olum-compiler, resolved the same way as olumVersion. Optional:
-      // older CLIs don't send it, and an app may not have the compiler installed
-      compilerVersion: parseVersion(compilerVersion) ?? "unknown",
-      os: platform,
-      timezone,
-      type: command,
-      timestamp: parseTimestamp(timestamp),
-      ts: Date.now(),
-      // both optional: older CLIs don't send them, and `add` has no flags
-      ...(label ? { name: label } : {}),
-      ...(flags ? { options: flags } : {}),
-    });
+    await db.ref(`${TELEMETRY_COL}/events`).push(
+      defined({
+        cliVersion: cli,
+        olumVersion: olum,
+        // stored exactly as the CLI reported it — the full runtime version, e.g.
+        // "24.15.0". Deliberately not parsed or format-checked, so an unusual build
+        // (nightly, rc, a vendor fork) records as-is instead of being rejected.
+        // `nodeMajor` is the key CLIs used before the rename; `null` when neither is
+        // present, since the database refuses an undefined value.
+        nodeVersion: nodeVersion ?? nodeMajor ?? null,
+        // the app's olum-compiler, resolved the same way as olumVersion. Optional:
+        // older CLIs don't send it, and an app may not have the compiler installed
+        compilerVersion: parseVersion(compilerVersion) ?? "unknown",
+        os: platform,
+        timezone: parseTimezone(timezone),
+        type: command,
+        timestamp: parseTimestamp(timestamp),
+        ts: Date.now(),
+        // both optional: older CLIs don't send them, and `add` has no flags
+        ...(label ? { name: label } : {}),
+        ...(flags ? { options: flags } : {}),
+      }),
+    );
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }

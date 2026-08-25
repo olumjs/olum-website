@@ -72,6 +72,15 @@ interface AnalyticsData {
   lastVisited?: string | null;
 }
 
+// The two halves of the dashboard. They share the header controls (range,
+// timezone exclusions, refresh) but never show at the same time.
+type DashboardTab = "site" | "users";
+
+const TABS: { value: DashboardTab; label: string }[] = [
+  { value: "site", label: "Website" },
+  { value: "users", label: "Olum Users" },
+];
+
 type DateRange = "all" | "24h" | "7d" | "30d" | "90d" | "custom";
 
 // A user-picked window from the calendar. `start` is the first day at 00:00 and
@@ -461,13 +470,27 @@ function DateRangeCalendar({
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 // Lightweight CSS-only tooltip (no external UI lib). Shows on hover/focus.
-function Hint({ content, children, className = "" }: { content: React.ReactNode; children: React.ReactNode; className?: string }) {
+// `placement` is manual, not measured: a tall tooltip near the top of the page
+// opens upward into the sticky navbar and gets clipped, so those pass "bottom".
+function Hint({
+  content,
+  children,
+  className = "",
+  placement = "top",
+}: {
+  content: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  placement?: "top" | "bottom";
+}) {
   return (
     <span className={`group/hint relative inline-flex ${className}`}>
       {children}
       <span
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 w-max max-w-[280px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[.78rem] leading-[1.6] text-[var(--fg-secondary)] opacity-0 shadow-lg transition-opacity duration-150 group-hover/hint:opacity-100 group-focus-within/hint:opacity-100"
+        className={`pointer-events-none absolute left-0 z-50 w-max max-w-[280px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[.78rem] leading-[1.6] text-[var(--fg-secondary)] opacity-0 shadow-lg transition-opacity duration-150 group-hover/hint:opacity-100 group-focus-within/hint:opacity-100 ${
+          placement === "bottom" ? "top-full mt-2" : "bottom-full mb-2"
+        }`}
       >
         {content}
       </span>
@@ -831,6 +854,7 @@ export default function AnalyticsDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>("all");
   const [customRange, setCustomRange] = useState<CustomRange | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [tab, setTab] = useState<DashboardTab>("site");
   const [visitsFullscreen, setVisitsFullscreen] = useState(false);
   const [telemetryFullscreen, setTelemetryFullscreen] = useState(false);
   const [hideBots, setHideBots] = useState(true);
@@ -1120,6 +1144,12 @@ export default function AnalyticsDashboard() {
     return DATE_RANGE_OPTIONS.find((o) => o.value === range)?.label ?? "";
   };
 
+  const changeTab = (next: DashboardTab) => {
+    setTab(next);
+    setVisitsFullscreen(false);
+    setTelemetryFullscreen(false);
+  };
+
   // Close fullscreen on Escape; lock page scroll while either table is expanded.
   const anyFullscreen = visitsFullscreen || telemetryFullscreen;
   useEffect(() => {
@@ -1172,6 +1202,15 @@ export default function AnalyticsDashboard() {
   const totalBlogReads = sumRecord(activeData?.blogs);
   const [topPageKey, topPageCount] = topEntry(activeData?.pageViews);
 
+  const lastPingStr = telemetry?.lastReceived
+    ? new Date(telemetry.lastReceived).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
   const lastVisitedStr = activeData?.lastVisited
     ? new Date(activeData.lastVisited).toLocaleString("en-US", {
         month: "short",
@@ -1192,9 +1231,14 @@ export default function AnalyticsDashboard() {
           <h1 className="gradient-text text-[clamp(1.8rem,4vw,2.5rem)] font-bold tracking-tight leading-none mt-1">
             Analytics
           </h1>
-          {lastVisitedStr && (
+          {tab === "site" && lastVisitedStr && (
             <p className="font-mono text-[11px] text-[var(--fg-muted)] mt-2 opacity-70">
               Last visitor: {lastVisitedStr}
+            </p>
+          )}
+          {tab === "users" && lastPingStr && (
+            <p className="font-mono text-[11px] text-[var(--fg-muted)] mt-2 opacity-70">
+              Last ping: {lastPingStr}
             </p>
           )}
         </div>
@@ -1310,402 +1354,149 @@ export default function AnalyticsDashboard() {
         </div>
       </div>
 
-      {/* ── Empty state for filtered range ── */}
-      {totalVisits === 0 && dateRange !== "all" && (
-        <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 flex items-center gap-3">
-          <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" className="text-[var(--fg-muted)] shrink-0">
-            <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
-          </svg>
-          <p className="font-mono text-[11px] text-[var(--fg-muted)]">
-            No visits recorded for <span className="text-[var(--fg)]">{rangeLabel(dateRange)}</span>.
-          </p>
-        </div>
-      )}
-
-      {/* ── Stats Row ── */}
-      <div className="flex gap-3 flex-wrap mb-5">
-        <StatCard
-          label="Sessions"
-          value={totalVisits.toLocaleString()}
-          sub="total visits"
-        />
-        <StatCard
-          label="Page Views"
-          value={totalPageViews.toLocaleString()}
-          sub="total route hits"
-        />
-        <StatCard
-          label="Blog Reads"
-          value={totalBlogReads.toLocaleString()}
-          sub="post views"
-        />
-        <StatCard
-          label="Top Page"
-          value={keyToRoute(topPageKey)}
-          sub={topPageCount ? `${topPageCount} views` : "—"}
-          valueClassName="text-[.95rem] break-all"
-        />
-      </div>
-
-      {/* ── Page Views + Blog Posts ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <Panel title="Page Views">
-          <BarChart data={activeData?.pageViews} labelFn={keyToRoute} />
-        </Panel>
-
-        <Panel title="Blog Posts">
-          {sumRecord(activeData?.blogs) === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)] opacity-40 py-1">No blog visits yet</p>
-          ) : (
-            <BarChart data={activeData?.blogs} labelFn={(k) => k.replace(/__/g, "/")} />
-          )}
-        </Panel>
-      </div>
-
-      {/* ── Devices / OS / Browsers ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <Panel title="Devices">
-          <BarChart data={activeData?.devices} />
-        </Panel>
-        <Panel title="OS">
-          <BarChart data={activeData?.os} labelFn={keyToLabel} />
-        </Panel>
-        <Panel title="Browsers">
-          <BarChart data={activeData?.browsers} labelFn={keyToLabel} />
-        </Panel>
-      </div>
-
-      {/* ── Timezones ── */}
-      <Panel title="Timezones">
-        <BarChart
-          data={activeData?.timezones}
-          labelFn={(k) => k.replace(/__/g, "/")}
-          maxItems={10}
-        />
-      </Panel>
-
-      {/* ── Referrers ── */}
-      <div className="mt-4">
-        <Panel title="Referrers" action={<ReferrerLegend />}>
-          <BarChart data={referrerCounts} descFn={(k) => REFERRER_HINTS[k]} maxItems={10} />
-        </Panel>
-      </div>
-
-      {/* ── Recent Visits ── */}
-      <div className={
-        visitsFullscreen
-          ? "fixed inset-x-0 bottom-0 top-[60px] z-40 flex flex-col bg-[var(--bg)]"
-          : `mt-4 ${CARD} overflow-hidden`
-      }>
-        <div className={`px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap ${visitsFullscreen ? "shrink-0" : ""}`}>
-          <p className={SEC_LBL}>Recent Visits</p>
-          <div className="flex items-center gap-3 flex-1 justify-end flex-wrap">
-            <input
-              type="search"
-              value={visitsSearch}
-              onChange={(e) => setVisitsSearch(e.target.value)}
-              placeholder="Search…"
-              className="bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[11px] text-[var(--fg)] placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--accent)] py-1.5 px-3 w-48"
-            />
-            <button
-              onClick={() => setHideBots((v) => !v)}
-              title={hideBots ? "Hiding likely bots (headless browser)" : "Showing bots"}
-              className={`shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono transition-colors ${
-                hideBots
-                  ? "bg-[var(--accent)]/15 text-[var(--accent)]"
-                  : "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)]"
-              }`}
-            >
-              Hide bots
-            </button>
-            {!!visibleVisits.length && (
-              <span className="font-mono text-[11px] text-[var(--fg-muted)] shrink-0">
-                {visibleVisits.length} entries
-              </span>
-            )}
-            <FullscreenToggle on={visitsFullscreen} onToggle={() => setVisitsFullscreen((v) => !v)} />
-          </div>
-        </div>
-
-        <div className={`overflow-x-auto overflow-y-auto ${visitsFullscreen ? "flex-1" : "max-h-[420px]"}`}>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
-                {["Route", "Blog Slug", "Referrer", "Device", "OS", "Browser", "Timezone", "Time"].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)] whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {!visibleVisits.length ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-10 text-center font-mono text-xs text-[var(--fg-muted)] opacity-40"
-                  >
-                    No visits recorded yet
-                  </td>
-                </tr>
-              ) : (
-                visibleVisits
-                .filter((v) => {
-                  const q = visitsSearch.toLowerCase();
-                  if (!q) return true;
-                  return [v.route, v.blogSlug, v.referrer, v.device, v.os, v.browser, v.timezone]
-                    .some((f) => f?.toLowerCase().includes(q));
-                })
-                .map((v) => (
-                  <tr
-                    key={v.key}
-                    className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"
-                  >
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg)] max-w-[120px]">
-                      <span className="block truncate" title={v.route}>{v.route}</span>
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-muted)] max-w-[120px]">
-                      {v.blogSlug
-                        ? <span className="block truncate" title={v.blogSlug}>{v.blogSlug}</span>
-                        : <span className="opacity-30">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] max-w-[120px]">
-                      {v.referrer
-                        ? <span className="block truncate" title={v.referrer}>{extractHostname(v.referrer)}</span>
-                        : <span className="opacity-30">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap capitalize">
-                      {v.device}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap">
-                      {v.os}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap">
-                      {v.browser}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
-                      {v.timezone}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
-                      {relativeTime(v.ts)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Hard break between the two halves of the page: everything above is the
-          website, everything below is the CLI. Different source, different data. */}
-      <div className="mt-14 mb-2 flex items-center gap-4" role="separator" aria-label="CLI telemetry">
-        <span className="h-px flex-1 bg-[var(--border)]" />
-        <span className={`${SEC_LBL} shrink-0`}>CLI Telemetry</span>
-        <span className="h-px flex-1 bg-[var(--border)]" />
-      </div>
-
-      {/* ── Olum CLI telemetry ── */}
-      <div className="mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-[var(--fg)] font-bold text-lg tracking-tight">Olum Users</h2>
-          {/* names the window these numbers cover, so nobody reads a filtered
-              total as the lifetime one */}
-          <span className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)]">
-            {rangeLabel(dateRange)}
-          </span>
-          <Hint
-            content={
-              <div className="flex flex-col gap-2 py-0.5 text-left leading-[1.5]">
-                <div>
-                  Anonymous pings sent by the Olum CLI. Each row is one ping, not one person —
-                  no identifier is stored, so the same machine reporting twice counts twice.
-                </div>
-                <div className="opacity-80">
-                  Treat the total as usage volume, not a headcount.
-                </div>
-                <div className="opacity-80">
-                  <span className="text-[var(--fg)]">Unique</span> counts one machine once:
-                  pings that agree on timezone, OS, Node, CLI, Olum and compiler version are
-                  folded into a single user. It is a best guess — two machines set up the same
-                  way look identical.
-                </div>
-                <div className="opacity-80">
-                  The date range and the excluded timezones above both apply here. Pings are
-                  windowed by when we received them, not by the clock on the sending machine.
-                  CLI pings are sparser than site visits, so a short range can leave this
-                  section empty.
-                </div>
-              </div>
-            }
-          >
-            <button
-              type="button"
-              aria-label="What does this section count?"
-              className="shrink-0 p-1 rounded-md text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)] transition-colors cursor-help"
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" />
-              </svg>
-            </button>
-          </Hint>
+      {/* ── Tabs ── */}
+      <div className="mb-6 flex items-center gap-1 border-b border-[var(--border)]">
+        {TABS.map((t) => (
           <button
-            onClick={() => setUniqueUsers((v) => !v)}
-            title={
-              uniqueUsers
-                ? "Counting unique users: timezone + OS + Node + CLI + Olum + compiler"
-                : "Counting every ping"
-            }
-            className={`ml-auto shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono transition-colors ${
-              uniqueUsers
-                ? "bg-[var(--accent)]/15 text-[var(--accent)]"
-                : "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+            key={t.value}
+            type="button"
+            onClick={() => changeTab(t.value)}
+            aria-current={tab === t.value ? "page" : undefined}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-[.8rem] font-medium transition-colors cursor-pointer ${
+              tab === t.value
+                ? "border-[var(--accent)] text-[var(--fg)]"
+                : "border-transparent text-[var(--fg-muted)] hover:text-[var(--fg)]"
             }`}
           >
-            Unique
+            {t.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* Same note as the visits table gets: an empty section is far more often
-            a narrow range than a dead CLI. */}
-        {!telemetryEvents.length && dateRange !== "all" && (
-          <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 flex items-center gap-3">
+      {tab === "site" && (
+        <>
+        {/* ── Empty state for filtered range ── */}
+        {totalVisits === 0 && dateRange !== "all" && (
+          <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 flex items-center gap-3">
             <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" className="text-[var(--fg-muted)] shrink-0">
               <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
             </svg>
             <p className="font-mono text-[11px] text-[var(--fg-muted)]">
-              No CLI pings received in <span className="text-[var(--fg)]">{rangeLabel(dateRange)}</span>.
+              No visits recorded for <span className="text-[var(--fg)]">{rangeLabel(dateRange)}</span>.
             </p>
           </div>
         )}
 
-        {/* the three headline numbers: projects scaffolded, flags used, components installed */}
-        <div className="flex gap-3 flex-wrap mb-3">
-          <StatCard
-            label="Projects Created"
-            value={telemetryBreakdown.projectsCreated.toLocaleString()}
-            sub={uniqueUsers ? "users who ran olum create" : "olum create runs"}
-          />
-          <StatCard
-            label="Options Used"
-            value={telemetryBreakdown.optionsUsed.toLocaleString()}
-            sub={`${Object.keys(telemetryBreakdown.optionCounts).length} distinct flag${
-              Object.keys(telemetryBreakdown.optionCounts).length === 1 ? "" : "s"
-            }`}
-          />
-          <StatCard
-            label="Components Added"
-            value={telemetryBreakdown.componentsAdded.toLocaleString()}
-            sub={`${Object.keys(telemetryBreakdown.components).length} distinct component${
-              Object.keys(telemetryBreakdown.components).length === 1 ? "" : "s"
-            }`}
-          />
-        </div>
-
+        {/* ── Stats Row ── */}
         <div className="flex gap-3 flex-wrap mb-5">
           <StatCard
-            label={uniqueUsers ? "Unique Users" : "Total Pings"}
-            value={(uniqueUsers ? telemetryBreakdown.userCount : telemetryEvents.length).toLocaleString()}
-            sub={uniqueUsers ? `of ${telemetryEvents.length.toLocaleString()} pings` : "CLI reports"}
+            label="Sessions"
+            value={totalVisits.toLocaleString()}
+            sub="total visits"
           />
           <StatCard
-            label="Top CLI"
-            value={topEntry(telemetryBreakdown.cliVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.cliVersions)[1] || 0} ${telemetryUnit}`}
-            valueClassName="text-[.95rem] break-all"
+            label="Page Views"
+            value={totalPageViews.toLocaleString()}
+            sub="total route hits"
           />
           <StatCard
-            label="Top Olum"
-            value={topEntry(telemetryBreakdown.olumVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.olumVersions)[1] || 0} ${telemetryUnit}`}
-            valueClassName="text-[.95rem] break-all"
+            label="Blog Reads"
+            value={totalBlogReads.toLocaleString()}
+            sub="post views"
           />
           <StatCard
-            label="Top Compiler"
-            value={topEntry(telemetryBreakdown.compilerVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.compilerVersions)[1] || 0} ${telemetryUnit}`}
-            valueClassName="text-[.95rem] break-all"
-          />
-          <StatCard
-            label="Top Node"
-            value={topEntry(telemetryBreakdown.nodeVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.nodeVersions)[1] || 0} ${telemetryUnit}`}
-            valueClassName="text-[.95rem] break-all"
-          />
-          <StatCard
-            label="Top OS"
-            value={topEntry(telemetryBreakdown.osCounts)[0]}
-            sub={`${topEntry(telemetryBreakdown.osCounts)[1] || 0} ${telemetryUnit}`}
-            valueClassName="text-[.95rem] break-all capitalize"
-          />
-          <StatCard
-            label="Top Timezone"
-            value={topEntry(telemetryBreakdown.timezoneCounts)[0]}
-            sub={`${topEntry(telemetryBreakdown.timezoneCounts)[1] || 0} ${telemetryUnit}`}
+            label="Top Page"
+            value={keyToRoute(topPageKey)}
+            sub={topPageCount ? `${topPageCount} views` : "—"}
             valueClassName="text-[.95rem] break-all"
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <Panel title="Commands">
-            <BarChart data={telemetryBreakdown.typeCounts} descFn={(k) => TELEMETRY_TYPES[k]} />
+        {/* ── Page Views + Blog Posts ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <Panel title="Page Views">
+            <BarChart data={activeData?.pageViews} labelFn={keyToRoute} />
           </Panel>
-          <Panel title="Operating Systems">
-            <BarChart data={telemetryBreakdown.osCounts} />
+
+          <Panel title="Blog Posts">
+            {sumRecord(activeData?.blogs) === 0 ? (
+              <p className="text-sm text-[var(--fg-muted)] opacity-40 py-1">No blog visits yet</p>
+            ) : (
+              <BarChart data={activeData?.blogs} labelFn={(k) => k.replace(/__/g, "/")} />
+            )}
           </Panel>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <Panel title="Components Added">
-            <BarChart data={telemetryBreakdown.components} maxItems={10} />
+        {/* ── Devices / OS / Browsers ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <Panel title="Devices">
+            <BarChart data={activeData?.devices} />
           </Panel>
-          <Panel title="Create Options">
-            {/* share of every `create` run that passed the flag, not of all flags used */}
-            <BarChart
-              data={telemetryBreakdown.optionCounts}
-              labelFn={(k) => `--${k}`}
-              total={telemetryBreakdown.projectsCreated}
-            />
+          <Panel title="OS">
+            <BarChart data={activeData?.os} labelFn={keyToLabel} />
           </Panel>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          {/* the name given to `olum create`, kebab-cased by the CLI so the same
-              project counts once however it was typed */}
-          <Panel title="Project Names">
-            <BarChart data={telemetryBreakdown.projects} maxItems={10} />
-          </Panel>
-          <Panel title="Timezones">
-            <BarChart data={telemetryBreakdown.timezoneCounts} maxItems={10} />
+          <Panel title="Browsers">
+            <BarChart data={activeData?.browsers} labelFn={keyToLabel} />
           </Panel>
         </div>
 
+        {/* ── Timezones ── */}
+        <Panel title="Timezones">
+          <BarChart
+            data={activeData?.timezones}
+            labelFn={(k) => k.replace(/__/g, "/")}
+            maxItems={10}
+          />
+        </Panel>
 
+        {/* ── Referrers ── */}
+        <div className="mt-4">
+          <Panel title="Referrers" action={<ReferrerLegend />}>
+            <BarChart data={referrerCounts} descFn={(k) => REFERRER_HINTS[k]} maxItems={10} />
+          </Panel>
+        </div>
+
+        {/* ── Recent Visits ── */}
         <div className={
-          telemetryFullscreen
+          visitsFullscreen
             ? "fixed inset-x-0 bottom-0 top-[60px] z-40 flex flex-col bg-[var(--bg)]"
-            : `${CARD} overflow-hidden`
+            : `mt-4 ${CARD} overflow-hidden`
         }>
-          <div className={`px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap ${telemetryFullscreen ? "shrink-0" : ""}`}>
-            <p className={SEC_LBL}>{uniqueUsers ? "Unique Users" : "Recent Pings"}</p>
-            <div className="flex items-center gap-3">
-              {!!visibleTelemetry.length && (
+          <div className={`px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap ${visitsFullscreen ? "shrink-0" : ""}`}>
+            <p className={SEC_LBL}>Recent Visits</p>
+            <div className="flex items-center gap-3 flex-1 justify-end flex-wrap">
+              <input
+                type="search"
+                value={visitsSearch}
+                onChange={(e) => setVisitsSearch(e.target.value)}
+                placeholder="Search…"
+                className="bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[11px] text-[var(--fg)] placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--accent)] py-1.5 px-3 w-48"
+              />
+              <button
+                onClick={() => setHideBots((v) => !v)}
+                title={hideBots ? "Hiding likely bots (headless browser)" : "Showing bots"}
+                className={`shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono transition-colors ${
+                  hideBots
+                    ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                    : "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+                }`}
+              >
+                Hide bots
+              </button>
+              {!!visibleVisits.length && (
                 <span className="font-mono text-[11px] text-[var(--fg-muted)] shrink-0">
-                  {visibleTelemetry.length} entries
+                  {visibleVisits.length} entries
                 </span>
               )}
-              <FullscreenToggle on={telemetryFullscreen} onToggle={() => setTelemetryFullscreen((v) => !v)} />
+              <FullscreenToggle on={visitsFullscreen} onToggle={() => setVisitsFullscreen((v) => !v)} />
             </div>
           </div>
 
-          <div className={`overflow-x-auto overflow-y-auto ${telemetryFullscreen ? "flex-1" : "max-h-[420px]"}`}>
+          <div className={`overflow-x-auto overflow-y-auto ${visitsFullscreen ? "flex-1" : "max-h-[420px]"}`}>
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  {["Command", "Name", "Options", "CLI Version", "Olum Version", "Compiler", "Node", "OS", "Timezone", "Reported", "Received"].map((h) => (
+                  {["Route", "Blog Slug", "Referrer", "Device", "OS", "Browser", "Timezone", "Time"].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)] whitespace-nowrap"
@@ -1716,73 +1507,55 @@ export default function AnalyticsDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {!visibleTelemetry.length ? (
+                {!visibleVisits.length ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={8}
                       className="px-4 py-10 text-center font-mono text-xs text-[var(--fg-muted)] opacity-40"
                     >
-                      No CLI pings recorded yet
+                      No visits recorded yet
                     </td>
                   </tr>
                 ) : (
-                  visibleTelemetry.map((e) => (
+                  visibleVisits
+                  .filter((v) => {
+                    const q = visitsSearch.toLowerCase();
+                    if (!q) return true;
+                    return [v.route, v.blogSlug, v.referrer, v.device, v.os, v.browser, v.timezone]
+                      .some((f) => f?.toLowerCase().includes(q));
+                  })
+                  .map((v) => (
                     <tr
-                      key={e.key}
+                      key={v.key}
                       className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"
                     >
-                      <td className="px-4 py-2.5 whitespace-nowrap">
-                        <span
-                          className="font-mono text-[11px] rounded-md px-2 py-1 bg-[var(--surface-hover)] text-[var(--fg-secondary)]"
-                          title={TELEMETRY_TYPES[e.type ?? "unknown"]}
-                        >
-                          {e.type ?? "unknown"}
-                        </span>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg)] max-w-[120px]">
+                        <span className="block truncate" title={v.route}>{v.route}</span>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg)] max-w-[160px]">
-                        {e.name
-                          ? <span className="block truncate" title={e.name}>{e.name}</span>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-muted)] max-w-[120px]">
+                        {v.blogSlug
+                          ? <span className="block truncate" title={v.blogSlug}>{v.blogSlug}</span>
                           : <span className="opacity-30">—</span>}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
-                        {e.options?.length
-                          ? e.options.map((flag) => `--${flag}`).join(" ")
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] max-w-[120px]">
+                        {v.referrer
+                          ? <span className="block truncate" title={v.referrer}>{extractHostname(v.referrer)}</span>
                           : <span className="opacity-30">—</span>}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
-                        {e.cliVersion}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
-                        {e.olumVersion}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
-                        {e.compilerVersion ?? <span className="opacity-30">—</span>}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
-                        {/* stringified: the value is stored unvalidated, and a
-                            non-primitive would otherwise crash the render */}
-                        {isDef(e.nodeVersion) ? String(e.nodeVersion) : <span className="opacity-30">—</span>}
                       </td>
                       <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap capitalize">
-                        {e.os}
+                        {v.device}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-secondary)] whitespace-nowrap">
-                        {e.timezone ?? <span className="opacity-30">—</span>}
+                      <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                        {v.os}
                       </td>
-                      {/* Reported = the clock on the user's machine; Received = ours. They
-                          disagree when a machine's clock is wrong, which is worth seeing. */}
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
-                        <span title={e.timestamp}>
-                          {new Date(e.timestamp).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                      <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                        {v.browser}
                       </td>
                       <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
-                        {relativeTime(e.ts)}
+                        {v.timezone}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
+                        {relativeTime(v.ts)}
                       </td>
                     </tr>
                   ))
@@ -1791,7 +1564,293 @@ export default function AnalyticsDashboard() {
             </table>
           </div>
         </div>
-      </div>
+        </>
+      )}
+
+      {tab === "users" && (
+        <>
+        {/* ── Olum CLI telemetry ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-[var(--fg)] font-bold text-lg tracking-tight">Olum Users</h2>
+            <Hint
+              placement="bottom"
+              content={
+                <div className="flex flex-col gap-2 py-0.5 text-left leading-[1.5]">
+                  <div>
+                    Anonymous pings sent by the Olum CLI. Each row is one ping, not one person —
+                    no identifier is stored, so the same machine reporting twice counts twice.
+                  </div>
+                  <div className="opacity-80">
+                    Treat the total as usage volume, not a headcount.
+                  </div>
+                  <div className="opacity-80">
+                    <span className="text-[var(--fg)]">Unique</span> counts one machine once:
+                    pings that agree on timezone, OS, Node, CLI, Olum and compiler version are
+                    folded into a single user. It is a best guess — two machines set up the same
+                    way look identical.
+                  </div>
+                  <div className="opacity-80">
+                    The date range and the excluded timezones above both apply here. Pings are
+                    windowed by when we received them, not by the clock on the sending machine.
+                    CLI pings are sparser than site visits, so a short range can leave this
+                    section empty.
+                  </div>
+                </div>
+              }
+            >
+              <button
+                type="button"
+                aria-label="What does this section count?"
+                className="shrink-0 p-1 rounded-md text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)] transition-colors cursor-help"
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" />
+                </svg>
+              </button>
+            </Hint>
+            <button
+              onClick={() => setUniqueUsers((v) => !v)}
+              title={
+                uniqueUsers
+                  ? "Counting unique users: timezone + OS + Node + CLI + Olum + compiler"
+                  : "Counting every ping"
+              }
+              className={`ml-auto shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono transition-colors ${
+                uniqueUsers
+                  ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                  : "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+              }`}
+            >
+              Unique
+            </button>
+          </div>
+
+          {/* Same note as the visits table gets: an empty section is far more often
+              a narrow range than a dead CLI. */}
+          {!telemetryEvents.length && dateRange !== "all" && (
+            <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 flex items-center gap-3">
+              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" className="text-[var(--fg-muted)] shrink-0">
+                <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
+              </svg>
+              <p className="font-mono text-[11px] text-[var(--fg-muted)]">
+                No CLI pings received in <span className="text-[var(--fg)]">{rangeLabel(dateRange)}</span>.
+              </p>
+            </div>
+          )}
+
+          {/* the three headline numbers: projects scaffolded, flags used, components installed */}
+          <div className="flex gap-3 flex-wrap mb-3">
+            <StatCard
+              label="Projects Created"
+              value={telemetryBreakdown.projectsCreated.toLocaleString()}
+              sub={uniqueUsers ? "users who ran olum create" : "olum create runs"}
+            />
+            <StatCard
+              label="Options Used"
+              value={telemetryBreakdown.optionsUsed.toLocaleString()}
+              sub={`${Object.keys(telemetryBreakdown.optionCounts).length} distinct flag${
+                Object.keys(telemetryBreakdown.optionCounts).length === 1 ? "" : "s"
+              }`}
+            />
+            <StatCard
+              label="Components Added"
+              value={telemetryBreakdown.componentsAdded.toLocaleString()}
+              sub={`${Object.keys(telemetryBreakdown.components).length} distinct component${
+                Object.keys(telemetryBreakdown.components).length === 1 ? "" : "s"
+              }`}
+            />
+          </div>
+
+          <div className="flex gap-3 flex-wrap mb-5">
+            <StatCard
+              label={uniqueUsers ? "Unique Users" : "Total Pings"}
+              value={(uniqueUsers ? telemetryBreakdown.userCount : telemetryEvents.length).toLocaleString()}
+              sub={uniqueUsers ? `of ${telemetryEvents.length.toLocaleString()} pings` : "CLI reports"}
+            />
+            <StatCard
+              label="Top CLI"
+              value={topEntry(telemetryBreakdown.cliVersions)[0]}
+              sub={`${topEntry(telemetryBreakdown.cliVersions)[1] || 0} ${telemetryUnit}`}
+              valueClassName="text-[.95rem] break-all"
+            />
+            <StatCard
+              label="Top Olum"
+              value={topEntry(telemetryBreakdown.olumVersions)[0]}
+              sub={`${topEntry(telemetryBreakdown.olumVersions)[1] || 0} ${telemetryUnit}`}
+              valueClassName="text-[.95rem] break-all"
+            />
+            <StatCard
+              label="Top Compiler"
+              value={topEntry(telemetryBreakdown.compilerVersions)[0]}
+              sub={`${topEntry(telemetryBreakdown.compilerVersions)[1] || 0} ${telemetryUnit}`}
+              valueClassName="text-[.95rem] break-all"
+            />
+            <StatCard
+              label="Top Node"
+              value={topEntry(telemetryBreakdown.nodeVersions)[0]}
+              sub={`${topEntry(telemetryBreakdown.nodeVersions)[1] || 0} ${telemetryUnit}`}
+              valueClassName="text-[.95rem] break-all"
+            />
+            <StatCard
+              label="Top OS"
+              value={topEntry(telemetryBreakdown.osCounts)[0]}
+              sub={`${topEntry(telemetryBreakdown.osCounts)[1] || 0} ${telemetryUnit}`}
+              valueClassName="text-[.95rem] break-all capitalize"
+            />
+            <StatCard
+              label="Top Timezone"
+              value={topEntry(telemetryBreakdown.timezoneCounts)[0]}
+              sub={`${topEntry(telemetryBreakdown.timezoneCounts)[1] || 0} ${telemetryUnit}`}
+              valueClassName="text-[.95rem] break-all"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <Panel title="Commands">
+              <BarChart data={telemetryBreakdown.typeCounts} descFn={(k) => TELEMETRY_TYPES[k]} />
+            </Panel>
+            <Panel title="Operating Systems">
+              <BarChart data={telemetryBreakdown.osCounts} />
+            </Panel>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <Panel title="Components Added">
+              <BarChart data={telemetryBreakdown.components} maxItems={10} />
+            </Panel>
+            <Panel title="Create Options">
+              {/* share of every `create` run that passed the flag, not of all flags used */}
+              <BarChart
+                data={telemetryBreakdown.optionCounts}
+                labelFn={(k) => `--${k}`}
+                total={telemetryBreakdown.projectsCreated}
+              />
+            </Panel>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            {/* the name given to `olum create`, kebab-cased by the CLI so the same
+                project counts once however it was typed */}
+            <Panel title="Project Names">
+              <BarChart data={telemetryBreakdown.projects} maxItems={10} />
+            </Panel>
+            <Panel title="Timezones">
+              <BarChart data={telemetryBreakdown.timezoneCounts} maxItems={10} />
+            </Panel>
+          </div>
+
+
+          <div className={
+            telemetryFullscreen
+              ? "fixed inset-x-0 bottom-0 top-[60px] z-40 flex flex-col bg-[var(--bg)]"
+              : `${CARD} overflow-hidden`
+          }>
+            <div className={`px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap ${telemetryFullscreen ? "shrink-0" : ""}`}>
+              <p className={SEC_LBL}>{uniqueUsers ? "Unique Users" : "Recent Pings"}</p>
+              <div className="flex items-center gap-3">
+                {!!visibleTelemetry.length && (
+                  <span className="font-mono text-[11px] text-[var(--fg-muted)] shrink-0">
+                    {visibleTelemetry.length} entries
+                  </span>
+                )}
+                <FullscreenToggle on={telemetryFullscreen} onToggle={() => setTelemetryFullscreen((v) => !v)} />
+              </div>
+            </div>
+
+            <div className={`overflow-x-auto overflow-y-auto ${telemetryFullscreen ? "flex-1" : "max-h-[420px]"}`}>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    {["Command", "Name", "Options", "CLI Version", "Olum Version", "Compiler", "Node", "OS", "Timezone", "Reported", "Received"].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)] whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {!visibleTelemetry.length ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="px-4 py-10 text-center font-mono text-xs text-[var(--fg-muted)] opacity-40"
+                      >
+                        No CLI pings recorded yet
+                      </td>
+                    </tr>
+                  ) : (
+                    visibleTelemetry.map((e) => (
+                      <tr
+                        key={e.key}
+                        className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"
+                      >
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span
+                            className="font-mono text-[11px] rounded-md px-2 py-1 bg-[var(--surface-hover)] text-[var(--fg-secondary)]"
+                            title={TELEMETRY_TYPES[e.type ?? "unknown"]}
+                          >
+                            {e.type ?? "unknown"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg)] max-w-[160px]">
+                          {e.name
+                            ? <span className="block truncate" title={e.name}>{e.name}</span>
+                            : <span className="opacity-30">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
+                          {e.options?.length
+                            ? e.options.map((flag) => `--${flag}`).join(" ")
+                            : <span className="opacity-30">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                          {e.cliVersion}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                          {e.olumVersion}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                          {e.compilerVersion ?? <span className="opacity-30">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--fg-secondary)] whitespace-nowrap">
+                          {/* stringified: the value is stored unvalidated, and a
+                              non-primitive would otherwise crash the render */}
+                          {isDef(e.nodeVersion) ? String(e.nodeVersion) : <span className="opacity-30">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap capitalize">
+                          {e.os}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-secondary)] whitespace-nowrap">
+                          {e.timezone ?? <span className="opacity-30">—</span>}
+                        </td>
+                        {/* Reported = the clock on the user's machine; Received = ours. They
+                            disagree when a machine's clock is wrong, which is worth seeing. */}
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
+                          <span title={e.timestamp}>
+                            {new Date(e.timestamp).toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-muted)] whitespace-nowrap">
+                          {relativeTime(e.ts)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        </>
+      )}
     </div>
   );
 }

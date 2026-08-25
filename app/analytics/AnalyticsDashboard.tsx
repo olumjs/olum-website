@@ -130,6 +130,32 @@ function sumRecord(rec?: Record<string, number>): number {
   return Object.values(rec ?? {}).reduce((a, b) => a + b, 0);
 }
 
+// No identifier is stored with a ping, so the closest thing to a machine is the
+// shape of its environment. Two pings that agree on all six fields are treated
+// as one user while the Unique toggle is on.
+function userFingerprint(e: TelemetryEvent): string {
+  return [
+    e.timezone ?? "unknown",
+    e.os,
+    isDef(e.nodeVersion) ? String(e.nodeVersion) : "unknown",
+    e.cliVersion,
+    e.olumVersion,
+    e.compilerVersion ?? "unknown",
+  ].join(" | ");
+}
+
+// One row per fingerprint — the newest ping, so the versions and the times show
+// where that user is now, not where they started.
+function latestPerUser(events: TelemetryEvent[]): TelemetryEvent[] {
+  const latest = new Map<string, TelemetryEvent>();
+  for (const e of events) {
+    const id = userFingerprint(e);
+    const seen = latest.get(id);
+    if (!seen || e.ts > seen.ts) latest.set(id, e);
+  }
+  return [...latest.values()].sort((a, b) => b.ts - a.ts);
+}
+
 // Telemetry reuses the analytics password — both endpoints are guarded by the
 // same SECRET. Kept separate from the analytics fetch so a telemetry failure
 // (or an empty log) never blocks the rest of the dashboard from rendering.
@@ -667,6 +693,8 @@ export default function AnalyticsDashboard() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [visitsFullscreen, setVisitsFullscreen] = useState(false);
   const [hideBots, setHideBots] = useState(true);
+  // Off: every ping counts. On: pings that share a user fingerprint count once.
+  const [uniqueUsers, setUniqueUsers] = useState(false);
 
   // Auto-login from session storage
   useEffect(() => {
@@ -768,56 +796,79 @@ export default function AnalyticsDashboard() {
     [telemetry],
   );
 
+  // Rows of the Recent list: one per ping, or one per user when the toggle is on.
+  const visibleTelemetry = useMemo<TelemetryEvent[]>(
+    () => (uniqueUsers ? latestPerUser(telemetryEvents) : telemetryEvents),
+    [telemetryEvents, uniqueUsers],
+  );
+
   const telemetryBreakdown = useMemo(() => {
-    const cliVersions: Record<string, number> = {};
-    const olumVersions: Record<string, number> = {};
-    const compilerVersions: Record<string, number> = {};
-    const nodeVersions: Record<string, number> = {};
-    const osCounts: Record<string, number> = {};
-    const timezoneCounts: Record<string, number> = {};
-    const typeCounts: Record<string, number> = {};
+    // Buckets hold ids, not counts. The id is the ping's own key while the
+    // toggle is off — so every ping counts — and the user fingerprint while it
+    // is on, so a machine counts once per bucket however often it ran a command.
+    const cliVersions: Record<string, Set<string>> = {};
+    const olumVersions: Record<string, Set<string>> = {};
+    const compilerVersions: Record<string, Set<string>> = {};
+    const nodeVersions: Record<string, Set<string>> = {};
+    const osCounts: Record<string, Set<string>> = {};
+    const timezoneCounts: Record<string, Set<string>> = {};
+    const typeCounts: Record<string, Set<string>> = {};
     // only `add` carries a name — it's an olum-ui component. Project names are
     // deliberately not collected, so `create` contributes its count and nothing else
-    const components: Record<string, number> = {};
-    const optionCounts: Record<string, number> = {};
-    let optionsUsed = 0;
+    const components: Record<string, Set<string>> = {};
+    const optionCounts: Record<string, Set<string>> = {};
+    const users = new Set<string>();
+
+    const bump = (bucket: Record<string, Set<string>>, key: string, id: string) => {
+      (bucket[key] ??= new Set()).add(id);
+    };
 
     for (const e of telemetryEvents) {
-      cliVersions[e.cliVersion] = (cliVersions[e.cliVersion] ?? 0) + 1;
-      olumVersions[e.olumVersion] = (olumVersions[e.olumVersion] ?? 0) + 1;
-      const compiler = e.compilerVersion ?? "unknown";
-      compilerVersions[compiler] = (compilerVersions[compiler] ?? 0) + 1;
-      nodeVersions[`node ${e.nodeVersion}`] = (nodeVersions[`node ${e.nodeVersion}`] ?? 0) + 1;
-      osCounts[e.os] = (osCounts[e.os] ?? 0) + 1;
-      const zone = e.timezone ?? "unknown";
-      timezoneCounts[zone] = (timezoneCounts[zone] ?? 0) + 1;
+      const id = uniqueUsers ? userFingerprint(e) : e.key;
+      users.add(userFingerprint(e));
+
+      bump(cliVersions, e.cliVersion, id);
+      bump(olumVersions, e.olumVersion, id);
+      bump(compilerVersions, e.compilerVersion ?? "unknown", id);
+      bump(nodeVersions, `node ${e.nodeVersion}`, id);
+      bump(osCounts, e.os, id);
+      bump(timezoneCounts, e.timezone ?? "unknown", id);
       const type = e.type ?? "unknown";
-      typeCounts[type] = (typeCounts[type] ?? 0) + 1;
+      bump(typeCounts, type, id);
 
-      if (e.name && type === "add") components[e.name] = (components[e.name] ?? 0) + 1;
+      if (e.name && type === "add") bump(components, e.name, id);
 
-      for (const flag of e.options ?? []) {
-        optionCounts[flag] = (optionCounts[flag] ?? 0) + 1;
-        optionsUsed++;
-      }
+      for (const flag of e.options ?? []) bump(optionCounts, flag, id);
     }
 
+    const sizes = (bucket: Record<string, Set<string>>): Record<string, number> =>
+      Object.fromEntries(Object.entries(bucket).map(([k, v]) => [k, v.size]));
+
+    const typeSizes = sizes(typeCounts);
+    const componentSizes = sizes(components);
+    const optionSizes = sizes(optionCounts);
+
     return {
-      cliVersions,
-      olumVersions,
-      compilerVersions,
-      nodeVersions,
-      osCounts,
-      timezoneCounts,
-      typeCounts,
-      components,
-      optionCounts,
-      optionsUsed,
-      // pings, not people — the same machine running the command twice counts twice
-      projectsCreated: typeCounts.create ?? 0,
-      componentsAdded: Object.values(components).reduce((a, b) => a + b, 0),
+      cliVersions: sizes(cliVersions),
+      olumVersions: sizes(olumVersions),
+      compilerVersions: sizes(compilerVersions),
+      nodeVersions: sizes(nodeVersions),
+      osCounts: sizes(osCounts),
+      timezoneCounts: sizes(timezoneCounts),
+      typeCounts: typeSizes,
+      components: componentSizes,
+      optionCounts: optionSizes,
+      optionsUsed: Object.values(optionSizes).reduce((a, b) => a + b, 0),
+      // pings by default — the same machine running the command twice counts
+      // twice — or distinct machines while the Unique toggle is on
+      projectsCreated: typeSizes.create ?? 0,
+      componentsAdded: Object.values(componentSizes).reduce((a, b) => a + b, 0),
+      userCount: users.size,
     };
-  }, [telemetryEvents]);
+  }, [telemetryEvents, uniqueUsers]);
+
+  // What one counted thing is called in the Olum Users section.
+  const telemetryUnit = uniqueUsers ? "users" : "pings";
 
   // Visits to show in the table — every visit, minus bots when that filter is on.
   const visibleVisits = useMemo<RecentVisit[]>(() => {
@@ -1261,6 +1312,12 @@ export default function AnalyticsDashboard() {
                   Treat the total as usage volume, not a headcount.
                 </div>
                 <div className="opacity-80">
+                  <span className="text-[var(--fg)]">Unique</span> counts one machine once:
+                  pings that agree on timezone, OS, Node, CLI, Olum and compiler version are
+                  folded into a single user. It is a best guess — two machines set up the same
+                  way look identical.
+                </div>
+                <div className="opacity-80">
                   This section always shows all time — the date range above applies to site
                   visits only.
                 </div>
@@ -1277,6 +1334,21 @@ export default function AnalyticsDashboard() {
               </svg>
             </button>
           </Hint>
+          <button
+            onClick={() => setUniqueUsers((v) => !v)}
+            title={
+              uniqueUsers
+                ? "Counting unique users: timezone + OS + Node + CLI + Olum + compiler"
+                : "Counting every ping"
+            }
+            className={`ml-auto shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono transition-colors ${
+              uniqueUsers
+                ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                : "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+            }`}
+          >
+            Unique
+          </button>
         </div>
 
         {/* the three headline numbers: projects scaffolded, flags used, components installed */}
@@ -1284,7 +1356,7 @@ export default function AnalyticsDashboard() {
           <StatCard
             label="Projects Created"
             value={telemetryBreakdown.projectsCreated.toLocaleString()}
-            sub="olum create runs"
+            sub={uniqueUsers ? "users who ran olum create" : "olum create runs"}
           />
           <StatCard
             label="Options Used"
@@ -1304,44 +1376,44 @@ export default function AnalyticsDashboard() {
 
         <div className="flex gap-3 flex-wrap mb-5">
           <StatCard
-            label="Total Pings"
-            value={telemetryEvents.length.toLocaleString()}
-            sub="CLI reports"
+            label={uniqueUsers ? "Unique Users" : "Total Pings"}
+            value={(uniqueUsers ? telemetryBreakdown.userCount : telemetryEvents.length).toLocaleString()}
+            sub={uniqueUsers ? `of ${telemetryEvents.length.toLocaleString()} pings` : "CLI reports"}
           />
           <StatCard
             label="Top CLI"
             value={topEntry(telemetryBreakdown.cliVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.cliVersions)[1] || 0} pings`}
+            sub={`${topEntry(telemetryBreakdown.cliVersions)[1] || 0} ${telemetryUnit}`}
             valueClassName="text-[.95rem] break-all"
           />
           <StatCard
             label="Top Olum"
             value={topEntry(telemetryBreakdown.olumVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.olumVersions)[1] || 0} pings`}
+            sub={`${topEntry(telemetryBreakdown.olumVersions)[1] || 0} ${telemetryUnit}`}
             valueClassName="text-[.95rem] break-all"
           />
           <StatCard
             label="Top Compiler"
             value={topEntry(telemetryBreakdown.compilerVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.compilerVersions)[1] || 0} pings`}
+            sub={`${topEntry(telemetryBreakdown.compilerVersions)[1] || 0} ${telemetryUnit}`}
             valueClassName="text-[.95rem] break-all"
           />
           <StatCard
             label="Top Node"
             value={topEntry(telemetryBreakdown.nodeVersions)[0]}
-            sub={`${topEntry(telemetryBreakdown.nodeVersions)[1] || 0} pings`}
+            sub={`${topEntry(telemetryBreakdown.nodeVersions)[1] || 0} ${telemetryUnit}`}
             valueClassName="text-[.95rem] break-all"
           />
           <StatCard
             label="Top OS"
             value={topEntry(telemetryBreakdown.osCounts)[0]}
-            sub={`${topEntry(telemetryBreakdown.osCounts)[1] || 0} pings`}
+            sub={`${topEntry(telemetryBreakdown.osCounts)[1] || 0} ${telemetryUnit}`}
             valueClassName="text-[.95rem] break-all capitalize"
           />
           <StatCard
             label="Top Timezone"
             value={topEntry(telemetryBreakdown.timezoneCounts)[0]}
-            sub={`${topEntry(telemetryBreakdown.timezoneCounts)[1] || 0} pings`}
+            sub={`${topEntry(telemetryBreakdown.timezoneCounts)[1] || 0} ${telemetryUnit}`}
             valueClassName="text-[.95rem] break-all"
           />
         </div>
@@ -1378,11 +1450,11 @@ export default function AnalyticsDashboard() {
 
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap">
-            <p className={SEC_LBL}>Recent Pings</p>
+            <p className={SEC_LBL}>{uniqueUsers ? "Unique Users" : "Recent Pings"}</p>
             <div className="flex items-center gap-3">
-              {!!telemetryEvents.length && (
+              {!!visibleTelemetry.length && (
                 <span className="font-mono text-[11px] text-[var(--fg-muted)] shrink-0">
-                  {telemetryEvents.length} entries
+                  {visibleTelemetry.length} entries
                 </span>
               )}
             </div>
@@ -1403,7 +1475,7 @@ export default function AnalyticsDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {!telemetryEvents.length ? (
+                {!visibleTelemetry.length ? (
                   <tr>
                     <td
                       colSpan={11}
@@ -1413,7 +1485,7 @@ export default function AnalyticsDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  telemetryEvents.map((e) => (
+                  visibleTelemetry.map((e) => (
                     <tr
                       key={e.key}
                       className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"

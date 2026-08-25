@@ -97,77 +97,77 @@
     "sections": [
       {
         "heading": "Start here",
-        "body": "A component is one .html file: <script> for logic, <style> for scoped CSS, and markup. Only markup is required.\n\nThe file name is the component name — Counter.html becomes <Counter />. Component tags start with a capital letter.\n\nOne rule for the syntax: when, each, key, on*, and html hold real JavaScript. Everything else is a string — use {expr} for the moving parts."
+        "body": "A component is one .html file: <script> for logic, <style> for scoped CSS, and markup. Only the markup is required.\n\nThe file name is the component name. Counter.html becomes <Counter />. Component tags start with a capital letter.\n\nOne rule for the syntax: when, each, key, on*, and html hold real JavaScript. Everything else is a string. Use {expr} for the moving parts."
       },
       {
         "heading": "1. User Interface",
-        "body": "Put reactive data in a top-level const called state. Write to it and the view updates",
+        "body": "Put reactive data in a top-level const called state. Write to it and the view updates. There is no setter and no render call.\n\n{state.taps} prints the value, onclick writes to it. That is the whole loop.",
         "code": "<script>\n  const state = { taps: 0 };\n</script>\n\n<button onclick=\"state.taps++\">{state.taps}</button>",
         "codeLanguage": "html"
       },
       {
         "heading": "2. Props",
-        "body": "Props pass data down. To send a change back up, pass a function too. A function prop must be a name — onChange=\"{setScore}\" works, an inline arrow doesn't.",
-        "code": "<!-- Parent -->\n<script>\n  import Child from \".Child\";\n\n  const state = { score: 0 };\n  const setScore = (n) => (state.score = n);\n</script>\n\n<Child title=\"Score\" value=\"{state.score}\" onChange=\"{setScore}\" />",
+        "body": "Props pass data down. The parent keeps the value and passes a function so the child can ask for a change.\n\nA function prop must be a name. onChange=\"{setScore}\" works, an inline arrow doesn't.",
+        "code": "<!-- Parent -->\n<script>\n  import Child from \"./Child\";\n\n  const state = { score: 0 };\n  const setScore = (n) => (state.score = n);\n</script>\n\n<Child title=\"Score\" value=\"{state.score}\" onChange=\"{setScore}\" />",
         "codeLanguage": "html"
       },
       {
         "heading": "",
-        "body": "In the child, call props() once at the top of <script> and destructure. Props are read-only, so the child asks for changes via onChange.",
+        "body": "Call props() once at the top of <script> and destructure. The names stay live, and step = 1 is the default when the parent leaves that prop out.\n\nProps are read-only. The child can't write to value, so it calls onChange instead.",
         "code": "<!-- Child -->\n<script>\n  import { props } from \"olum\";\n\n  const { title, value, onChange, step = 1 } = props();\n  const inc = () => onChange(value + step);\n</script>\n\n<p>{title}: {value}</p>\n<button onclick=\"inc()\">+{step}</button>",
         "codeLanguage": "html"
       },
       {
         "heading": "3. Slots",
-        "body": "Anything between a component's tags becomes a prop called children.",
+        "body": "Anything between a component's tags becomes a prop called children. The empty <Box /> passes nothing.",
         "code": "<!-- Parent.html -->\n<script>\n  import Box from \"./Box\";\n</script>\n\n<Box>\n  <h3>Title</h3>\n  <p>Any markup you like.</p>\n</Box>\n\n<Box />   <!-- shows the fallback -->",
         "codeLanguage": "html"
       },
       {
         "heading": "",
-        "body": "Use <if> with <else> to show a fallback when there's none.",
+        "body": "The child drops children wherever it wants. <if> with <else> gives a fallback when the parent passed nothing.",
         "code": "<!-- Box.html -->\n<script>\n  import { props } from \"olum\";\n  const { children } = props();\n</script>\n\n<div class=\"box\">\n  <if when=\"children\">{children}</if>\n  <else><em>Nothing inside yet.</em></else>\n</div>",
         "codeLanguage": "html"
       },
       {
         "heading": "4. onMount and cleanup",
-        "body": "onMount runs once, when the component enters the page — it can be async, so fetch right inside it. Return a function to clean up; it runs when the component leaves.",
-        "code": "<script>\n  import { onMount } from \"olum\";\n\n  const state = { users: [], seconds: 0 };\n\n  onMount(async () => {\n    const res = await fetch(\"https://jsonplaceholder.typicode.com/posts\");\n    const json = await res.json()\n    state.users = json;\n\n    const id = setInterval(() => state.seconds++, 1000);\n\n    return () => clearInterval(id);   // cleanup\n  });\n</script>\n\n<p>{state.users.length} users · {state.seconds}s</p>",
+        "body": "onMount runs once, when the component enters the page. It can be async, so you fetch right inside it.\n\nReturn a function to clean up. It runs when the component leaves — here it stops the interval.",
+        "code": "<script>\n  import { onMount } from \"olum\";\n\n  const state = { users: [], seconds: 0 };\n\n  onMount(async () => {\n    const res = await fetch(\"https://jsonplaceholder.typicode.com/users\");\n    const json = await res.json()\n    state.users = json;\n\n    const id = setInterval(() => state.seconds++, 1000);\n\n    return () => clearInterval(id);   // cleanup\n  });\n</script>\n\n<p>{state.users.length} users · {state.seconds}s</p>",
         "codeLanguage": "html"
       },
       {
         "heading": "5. Watchers",
-        "body": "A watcher runs whenever a value changes. Declare a top-level const called watcher with one method per key. It only fires on top-level keys — for nested changes, assign a fresh object.",
+        "body": "A watcher runs whenever a value changes. Declare a top-level const called watcher with one method per key. Each method gets the old value and the new one.\n\nIt only fires on top-level keys. For a nested change, assign a fresh object to the key.",
         "code": "<script>\n  const state = { query: \"\" };\n\n  const watcher = {\n    query(old, next) {\n      console.log(old, next)\n    },\n  };\n</script>\n\n<input value=\"{state.query}\" oninput=\"(e) => state.query = e.target.value\" />",
         "codeLanguage": "html"
       },
       {
         "heading": "6. If, else-if, else",
-        "body": "when holds a JS expression. False removes the content entirely (components inside unmount and clean up). To just hide something without unmounting it, use <show when=\"...\"> instead.",
+        "body": "when holds a JS expression. False removes the content from the page, so a component inside unmounts and its cleanup runs.\n\nTo hide something without unmounting it, use <show when=\"...\"> instead.",
         "code": "<script>\n  const state = { status: \"loading\" };\n  const set = (s) => (state.status = s);\n</script>\n\n<if when=\"state.status === 'loading'\"><p>Loading…</p></if>\n<else-if when=\"state.status === 'error'\"><p>Something broke.</p></else-if>\n<else><p>All good.</p></else>\n\n<button onclick=\"set('done')\">Finish</button>",
         "codeLanguage": "html"
       },
       {
         "heading": "7. Loops",
-        "body": "each works three ways: item of array, key in object, or n of 3 for a plain count. Add key when a list can reorder or shrink. Reactivity is deep, so mutating a nested field updates the view automatically.",
-        "code": "<script>\n  const state = {\n    todos: [\n      { id: 1, text: \"Read this guide\"},\n      { id: 2, text: \"Build something\" },\n    ],\n  };\n\n  const toggle = (todo) => (todo.done = !todo.done);\n</script>\n\n<for each=\"todo of state.todos\" key=\"todo.id\">\n  <li>\n    {todo.text}\n  </li>\n</for>",
+        "body": "each takes item of array. Add key so every row keeps its own DOM when the list reorders or shrinks.\n\nTwo more forms exist: key in object, and n of 3 for a plain count.",
+        "code": "<script>\n  const state = {\n    todos: [\n      { id: 1, text: \"Read this guide\"},\n      { id: 2, text: \"Build something\" },\n    ],\n  };\n</script>\n\n<for each=\"todo of state.todos\" key=\"todo.id\">\n  <li>\n    {todo.text}\n  </li>\n</for>",
         "codeLanguage": "html"
       },
       {
         "heading": "8. Shared state: the store",
-        "body": "state belongs to one component; a store belongs to the whole app. Write it once in a plain .js file using method shorthand (so this works) — an arrow function won't.",
+        "body": "state belongs to one component; a store belongs to the whole app.\n\nWrite it once in a plain .js file and import it anywhere. There's no provider to set up.",
         "code": "// cart.js\nimport { store } from \"olum\";\n\nexport const cart = store({ items: [\"Lantern\", \"Tent\", \"Hatchet\"] });",
         "codeLanguage": "js"
       },
       {
         "heading": "Using it",
-        "body": "Reading a store during render subscribes the component automatically. No provider, no cleanup.",
+        "body": "Reading the store during render subscribes the component. It re-renders on every change, and there's nothing to clean up.\n\nThe buttons write to the store directly — any component can.",
         "code": "<!-- Basket -->\n<script>\n  import { cart } from \"./cart.js\";\n</script>\n\n<p>{cart.items.length} items</p>\n\n<for each=\"name of cart.items\" key=\"name\"><li>{name}</li></for>\n\n<button onclick=\"cart.items.push('Apple')\">Add apple</button>\n<button onclick=\"cart.items= []\">Empty</button>",
         "codeLanguage": "html"
       },
       {
         "heading": "Next",
-        "body": "Three rules to remember: code lives in when, each, key, on*, and html — everything else is a string with {expr}. A function prop is always a name, never an inline arrow. Add key to any list that can reorder or shrink.\n\nThe [docs](/docs) cover routing, forms, transitions, and scoped CSS. The [playground](/playground) runs all of this with no install."
+        "body": "Three rules to remember. Code lives in when, each, key, on*, and html; everything else is a string with {expr}. A function prop is always a name, never an inline arrow. Add key to any list that can reorder or shrink.\n\nThe [docs](/docs) cover routing, forms, transitions, and scoped CSS. The [playground](/playground) runs all of this with no install."
       }
     ],
     "featured": true

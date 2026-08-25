@@ -32,6 +32,9 @@ interface TelemetryEvent {
   // and older pings carry a bare major as a number, so the shape isn't guaranteed
   nodeVersion?: string | number;
   os: string;
+  // IANA zone name the CLI resolved, "Africa/Cairo". "unknown" when the machine
+  // could not resolve one, and absent on pings that predate the field
+  timezone?: string;
   // absent on pings from CLI versions that predate the field
   type?: string;
   // the command's argument, `add` only — an olum-ui component. `create` project
@@ -771,6 +774,7 @@ export default function AnalyticsDashboard() {
     const compilerVersions: Record<string, number> = {};
     const nodeVersions: Record<string, number> = {};
     const osCounts: Record<string, number> = {};
+    const timezoneCounts: Record<string, number> = {};
     const typeCounts: Record<string, number> = {};
     // only `add` carries a name — it's an olum-ui component. Project names are
     // deliberately not collected, so `create` contributes its count and nothing else
@@ -785,6 +789,8 @@ export default function AnalyticsDashboard() {
       compilerVersions[compiler] = (compilerVersions[compiler] ?? 0) + 1;
       nodeVersions[`node ${e.nodeVersion}`] = (nodeVersions[`node ${e.nodeVersion}`] ?? 0) + 1;
       osCounts[e.os] = (osCounts[e.os] ?? 0) + 1;
+      const zone = e.timezone ?? "unknown";
+      timezoneCounts[zone] = (timezoneCounts[zone] ?? 0) + 1;
       const type = e.type ?? "unknown";
       typeCounts[type] = (typeCounts[type] ?? 0) + 1;
 
@@ -802,6 +808,7 @@ export default function AnalyticsDashboard() {
       compilerVersions,
       nodeVersions,
       osCounts,
+      timezoneCounts,
       typeCounts,
       components,
       optionCounts,
@@ -1331,6 +1338,12 @@ export default function AnalyticsDashboard() {
             sub={`${topEntry(telemetryBreakdown.osCounts)[1] || 0} pings`}
             valueClassName="text-[.95rem] break-all capitalize"
           />
+          <StatCard
+            label="Top Timezone"
+            value={topEntry(telemetryBreakdown.timezoneCounts)[0]}
+            sub={`${topEntry(telemetryBreakdown.timezoneCounts)[1] || 0} pings`}
+            valueClassName="text-[.95rem] break-all"
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -1356,6 +1369,12 @@ export default function AnalyticsDashboard() {
           </Panel>
         </div>
 
+        <div className="mb-4">
+          <Panel title="Timezones">
+            <BarChart data={telemetryBreakdown.timezoneCounts} maxItems={10} />
+          </Panel>
+        </div>
+
 
         <div className={`${CARD} overflow-hidden`}>
           <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap">
@@ -1373,7 +1392,7 @@ export default function AnalyticsDashboard() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  {["Command", "Name", "Options", "CLI Version", "Olum Version", "Compiler", "Node", "OS", "Reported", "Received"].map((h) => (
+                  {["Command", "Name", "Options", "CLI Version", "Olum Version", "Compiler", "Node", "OS", "Timezone", "Reported", "Received"].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fg-muted)] whitespace-nowrap"
@@ -1387,7 +1406,7 @@ export default function AnalyticsDashboard() {
                 {!telemetryEvents.length ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-4 py-10 text-center font-mono text-xs text-[var(--fg-muted)] opacity-40"
                     >
                       No CLI pings recorded yet
@@ -1433,6 +1452,9 @@ export default function AnalyticsDashboard() {
                       </td>
                       <td className="px-4 py-2.5 text-xs text-[var(--fg-secondary)] whitespace-nowrap capitalize">
                         {e.os}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[var(--fg-secondary)] whitespace-nowrap">
+                        {e.timezone ?? <span className="opacity-30">—</span>}
                       </td>
                       {/* Reported = the clock on the user's machine; Received = ours. They
                           disagree when a machine's clock is wrong, which is worth seeing. */}

@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid body" }, { status: 400 });
   }
 
-  const { cliVersion, olumVersion, compilerVersion, nodeVersion, nodeMajor, os, type, name, options, timestamp } =
+  const { cliVersion, olumVersion, compilerVersion, nodeVersion, nodeMajor, os, timezone, type, name, options, timestamp } =
     body as Record<string, unknown>;
 
   const cli = parseVersion(cliVersion);
@@ -188,6 +188,7 @@ export async function POST(req: NextRequest) {
       // older CLIs don't send it, and an app may not have the compiler installed
       compilerVersion: parseVersion(compilerVersion) ?? "unknown",
       os: platform,
+      timezone,
       type: command,
       timestamp: parseTimestamp(timestamp),
       ts: Date.now(),

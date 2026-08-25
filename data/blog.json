@@ -100,33 +100,45 @@
         "body": "A component is one .html file: <script> for logic, <style> for scoped CSS, and markup. Only markup is required.\n\nThe file name is the component name — Counter.html becomes <Counter />. Component tags start with a capital letter.\n\nOne rule for the syntax: when, each, key, on*, and html hold real JavaScript. Everything else is a string — use {expr} for the moving parts."
       },
       {
-        "heading": "1. A counter",
+        "heading": "1. User Interface",
         "body": "Put reactive data in a top-level const called state. Write to it and the view updates",
         "code": "<script>\n  const state = { taps: 0 };\n</script>\n\n<button onclick=\"state.taps++\">{state.taps}</button>",
         "codeLanguage": "html"
       },
       {
         "heading": "2. Props",
-        "body": "Props pass data down. To send a change back up, pass a function too. A function prop must be a name — onChange=\"{setScore}\" works, an inline arrow doesn't.\n\nIn the child, call props() once at the top of <script> and destructure. Props are read-only, so the child asks for changes via onChange.",
-        "code": "<!-- Parent.html -->\n<script>\n  import CounterCard from \"./components/CounterCard\";\n\n  const state = { score: 0 };\n  const setScore = (n) => (state.score = n);\n</script>\n\n<CounterCard title=\"Score\" value=\"{state.score}\" onChange=\"{setScore}\" />\n\n<!-- components/CounterCard.html -->\n<script>\n  import { props } from \"olum\";\n\n  const { title, value, onChange, step = 1 } = props();\n\n  const inc = () => onChange(value + step);\n</script>\n\n<p>{title}: {value}</p>\n<button onclick=\"inc()\">+{step}</button>",
+        "body": "Props pass data down. To send a change back up, pass a function too. A function prop must be a name — onChange=\"{setScore}\" works, an inline arrow doesn't.",
+        "code": "<!-- Parent -->\n<script>\n  import Child from \".Child\";\n\n  const state = { score: 0 };\n  const setScore = (n) => (state.score = n);\n</script>\n\n<Child title=\"Score\" value=\"{state.score}\" onChange=\"{setScore}\" />",
+        "codeLanguage": "html"
+      },
+      {
+        "heading": "",
+        "body": "In the child, call props() once at the top of <script> and destructure. Props are read-only, so the child asks for changes via onChange.",
+        "code": "<!-- Child -->\n<script>\n  import { props } from \"olum\";\n\n  const { title, value, onChange, step = 1 } = props();\n  const inc = () => onChange(value + step);\n</script>\n\n<p>{title}: {value}</p>\n<button onclick=\"inc()\">+{step}</button>",
         "codeLanguage": "html"
       },
       {
         "heading": "3. Slots",
-        "body": "Anything between a component's tags becomes a prop called children. Use <if> with <else> to show a fallback when there's none.",
-        "code": "<!-- Parent.html -->\n<Box>\n  <h3>Title</h3>\n  <p>Any markup you like.</p>\n</Box>\n\n<Box />   <!-- shows the fallback -->\n\n<!-- components/Box.html -->\n<script>\n  import { props } from \"olum\";\n  const { children } = props();\n</script>\n\n<div class=\"box\">\n  <if when=\"children\">{children}</if>\n  <else><em>Nothing inside yet.</em></else>\n</div>",
+        "body": "Anything between a component's tags becomes a prop called children.",
+        "code": "<!-- Parent.html -->\n<script>\n  import Box from \"./Box\";\n</script>\n\n<Box>\n  <h3>Title</h3>\n  <p>Any markup you like.</p>\n</Box>\n\n<Box />   <!-- shows the fallback -->",
+        "codeLanguage": "html"
+      },
+      {
+        "heading": "",
+        "body": "Use <if> with <else> to show a fallback when there's none.",
+        "code": "<!-- Box.html -->\n<script>\n  import { props } from \"olum\";\n  const { children } = props();\n</script>\n\n<div class=\"box\">\n  <if when=\"children\">{children}</if>\n  <else><em>Nothing inside yet.</em></else>\n</div>",
         "codeLanguage": "html"
       },
       {
         "heading": "4. onMount and cleanup",
         "body": "onMount runs once, when the component enters the page — it can be async, so fetch right inside it. Return a function to clean up; it runs when the component leaves.",
-        "code": "<script>\n  import { onMount } from \"olum\";\n\n  const state = { users: [], seconds: 0 };\n\n  onMount(async () => {\n    const res = await fetch(\"/api/users\");\n    state.users = await res.json();\n\n    const id = setInterval(() => state.seconds++, 1000);\n\n    return () => clearInterval(id);   // cleanup\n  });\n</script>\n\n<p>{state.users.length} users · {state.seconds}s</p>",
+        "code": "<script>\n  import { onMount } from \"olum\";\n\n  const state = { users: [], seconds: 0 };\n\n  onMount(async () => {\n    const res = await fetch(\"https://jsonplaceholder.typicode.com/posts\");\n    const json = await res.json()\n    state.users = json;\n\n    const id = setInterval(() => state.seconds++, 1000);\n\n    return () => clearInterval(id);   // cleanup\n  });\n</script>\n\n<p>{state.users.length} users · {state.seconds}s</p>",
         "codeLanguage": "html"
       },
       {
         "heading": "5. Watchers",
         "body": "A watcher runs whenever a value changes. Declare a top-level const called watcher with one method per key. It only fires on top-level keys — for nested changes, assign a fresh object.",
-        "code": "<script>\n  const state = { query: \"\", hits: [] };\n\n  const watcher = {\n    query(old, next) {\n      state.hits = next ? [\"apple\", \"apricot\"].filter((f) => f.startsWith(next)) : [];\n    },\n  };\n</script>\n\n<input value=\"{state.query}\" oninput=\"(e) => state.query = e.target.value\" />\n\n<for each=\"hit of state.hits\" key=\"hit\"><p>{hit}</p></for>",
+        "code": "<script>\n  const state = { query: \"\" };\n\n  const watcher = {\n    query(old, next) {\n      console.log(old, next)\n    },\n  };\n</script>\n\n<input value=\"{state.query}\" oninput=\"(e) => state.query = e.target.value\" />",
         "codeLanguage": "html"
       },
       {
@@ -138,14 +150,20 @@
       {
         "heading": "7. Loops",
         "body": "each works three ways: item of array, key in object, or n of 3 for a plain count. Add key when a list can reorder or shrink. Reactivity is deep, so mutating a nested field updates the view automatically.",
-        "code": "<script>\n  const state = {\n    todos: [\n      { id: 1, text: \"Read this guide\", done: true },\n      { id: 2, text: \"Build something\", done: false },\n    ],\n  };\n\n  const toggle = (todo) => (todo.done = !todo.done);\n</script>\n\n<for each=\"todo of state.todos\" key=\"todo.id\">\n  <li>\n    <input type=\"checkbox\" checked=\"{todo.done}\" onchange=\"toggle(todo)\" />\n    {todo.text}\n  </li>\n</for>\n\n<for each=\"(fruit, i) of state.fruits\"><p>{i + 1}. {fruit}</p></for>\n\n<for each=\"n of 3\"><span>Step {n}</span></for>",
+        "code": "<script>\n  const state = {\n    todos: [\n      { id: 1, text: \"Read this guide\"},\n      { id: 2, text: \"Build something\" },\n    ],\n  };\n\n  const toggle = (todo) => (todo.done = !todo.done);\n</script>\n\n<for each=\"todo of state.todos\" key=\"todo.id\">\n  <li>\n    {todo.text}\n  </li>\n</for>",
         "codeLanguage": "html"
       },
       {
         "heading": "8. Shared state: the store",
-        "body": "state belongs to one component; a store belongs to the whole app. Write it once in a plain .js file using method shorthand (so this works) — an arrow function won't. Reading a store during render subscribes the component automatically.",
-        "code": "// src/utils/store.js\nimport { store } from \"olum\";\n\nexport const cart = store({\n  items: [],\n\n  add(name) {\n    this.items.push(name);\n  },\n  clear() {\n    this.items = [];\n  },\n});\n\n<!-- components/Basket.html -->\n<script>\n  import { cart } from \"../utils/store\";\n</script>\n\n<p>{cart.items.length} items</p>\n\n<for each=\"name of cart.items\" key=\"name\"><li>{name}</li></for>\n\n<button onclick=\"cart.add('Apple')\">Add apple</button>\n<button onclick=\"cart.clear()\">Empty</button>",
+        "body": "state belongs to one component; a store belongs to the whole app. Write it once in a plain .js file using method shorthand (so this works) — an arrow function won't.",
+        "code": "// cart.js\nimport { store } from \"olum\";\n\nexport const cart = store({ items: [\"Lantern\", \"Tent\", \"Hatchet\"] });",
         "codeLanguage": "js"
+      },
+      {
+        "heading": "Using it",
+        "body": "Reading a store during render subscribes the component automatically. No provider, no cleanup.",
+        "code": "<!-- Basket -->\n<script>\n  import { cart } from \"./cart.js\";\n</script>\n\n<p>{cart.items.length} items</p>\n\n<for each=\"name of cart.items\" key=\"name\"><li>{name}</li></for>\n\n<button onclick=\"cart.items.push('Apple')\">Add apple</button>\n<button onclick=\"cart.items= []\">Empty</button>",
+        "codeLanguage": "html"
       },
       {
         "heading": "Next",

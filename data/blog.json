@@ -160,7 +160,7 @@
         "codeLanguage": "js"
       },
       {
-        "heading": "Using it",
+        "heading": "",
         "body": "Reading the store during render subscribes the component. It re-renders on every change, and there's nothing to clean up.\n\nThe buttons write to the store directly — any component can.",
         "code": "<!-- Basket -->\n<script>\n  import { cart } from \"./cart.js\";\n</script>\n\n<p>{cart.items.length} items</p>\n\n<for each=\"name of cart.items\" key=\"name\"><li>{name}</li></for>\n\n<button onclick=\"cart.items.push('Apple')\">Add apple</button>\n<button onclick=\"cart.items= []\">Empty</button>",
         "codeLanguage": "html"

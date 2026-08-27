@@ -523,9 +523,9 @@ Multiple dynamic segments work (`/users/[id]/posts/[postId]`). Static route wins
 ```js title="src/main.js"
 import Olum from "olum";
 import page from "./page.js";
-new Olum().$("#app").use(page);   // single component, no router (can drop olum-router from package.json)
+new Olum().$("olum-app").use(page);   // single component, no router (can drop olum-router from package.json)
 ```
-Manual router config: build a `routes` array of `{ path, comp }`, `new Router({ mode: "history", root: "/", routes, err: "/404" })`, `new Olum().$("#app").use(router)`.
+Manual router config: build a `routes` array of `{ path, comp }`, `new Router({ mode: "history", root: "/", routes, err: "/404" })`, `new Olum().$("olum-app").use(router)`.
 
 ---
 

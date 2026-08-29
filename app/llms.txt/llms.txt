@@ -22,6 +22,7 @@ src/
 ├── page.html            → route "/"        (a folder is a route only if it has page.html)
 ├── not-found.html       → global 404 page  (must be at src/ root; lowercase)
 ├── main.js              → OPTIONAL entry. Omit it → router auto-generated from the file tree.
+├── sitemap.js           → OPTIONAL. Its presence switches on prerendering/SSG (build-time only, NO route).
 ├── about/page.html      → "/about"
 ├── blog/page.html       → "/blog"
 ├── blog/[slug]/page.html→ "/blog/:slug"    (dynamic segment → params().slug)
@@ -51,7 +52,7 @@ slash: `<span style="background-image: url(/assets/{type}.svg)">`. `public/index
 
 ## Component file structure
 
-One `.html` file, up to three parts: `<script>` (logic), `<style>` (scoped CSS), and the template (everything else).
+One `.html` file, up to three parts: `<script>` (logic), `<style>` (scoped CSS), and the template (everything else). A **page** component may add a fourth, `<head>` (metadata — see Page metadata & SEO).
 
 ```html title="Counter.html"
 <script>
@@ -71,6 +72,7 @@ One `.html` file, up to three parts: `<script>` (logic), `<style>` (scoped CSS),
 
 - The **filename is the component name** — `CounterCard.html` → `<CounterCard />`. Component tags are **PascalCase**; that's how the compiler distinguishes a component from a plain element.
 - `<script>` and `<style>` are both optional. Markup-only files are valid static components.
+- `<head>` is **page-only** (`page.html` / `not-found.html`); elsewhere it is ignored with a build warning.
 - Every instance renders inside a runtime wrapper `<div>` — that wrapper is `host` (see Lifecycle).
 - Import components by their file name (`.html` compiles to `.js`, so imports reference `.js`... but you write the source name):
   ```html
@@ -523,9 +525,9 @@ Multiple dynamic segments work (`/users/[id]/posts/[postId]`). Static route wins
 ```js title="src/main.js"
 import Olum from "olum";
 import page from "./page.js";
-new Olum().$("olum-app").use(page);   // single component, no router (can drop olum-router from package.json)
+new Olum().$("#olum-app").use(page);   // single component, no router (can drop olum-router from package.json)
 ```
-Manual router config: build a `routes` array of `{ path, comp }`, `new Router({ mode: "history", root: "/", routes, err: "/404" })`, `new Olum().$("olum-app").use(router)`.
+Manual router config: build a `routes` array of `{ path, comp }`, `new Router({ mode: "history", root: "/", routes, err: "/404" })`, `new Olum().$("#olum-app").use(router)`.
 
 ---
 
@@ -562,9 +564,66 @@ export const cart = store({
 
 ---
 
+## Page metadata & SEO — `<head>`
+
+A **page** component (`page.html` / `not-found.html` ONLY — anywhere else it is ignored with a build warning) declares the document head inside its own file. The block is lifted out like `<style>` is and compiled **inside the component closure**, so every `{expr}` reads the same `state` / `params()` / `props()` / consts the template reads.
+```html title="src/blog/[slug]/page.html"
+<head>
+  <title>{post.title} — My Blog</title>
+  <meta name="description" content="{post.excerpt}" />     <!-- escaped, like the template -->
+  <link rel="canonical" href="https://ex.com/blog/{slug}" />
+  <meta property="og:image" content="{post.cover}" />
+  <script type="application/ld+json">
+    { "@type": "Article", "headline": "{post.title}" }     <!-- bare { = JSON; {expr} ONLY inside "…", inserted RAW -->
+  </script>
+</head>
+<script>
+  import { params } from "olum";
+  const { slug } = params();
+  const post = getPost(slug);
+</script>
+<article><h1>{post.title}</h1></article>
+```
+- **Merge with `public/index.html`** (the baseline): a tag the page declares REPLACES the shell's tag of the same slot **in its original position**; a tag with no counterpart is APPENDED; **every other shell tag is left exactly as it was** — nothing is deleted for not being mentioned (charset/viewport/favicon/stylesheet stay, as do scoped-CSS `<style>` tags and the bundler's `<script>`/`<link>`). So put site-wide tags in the shell and only page-specific ones in the page. `not-found.html` behaves identically.
+- **Slots:** `<title>`/`<base>` = the tag; `<meta charset>`; `<meta name|property|http-equiv|itemprop>` = that name; `<link rel=canonical|icon|apple-touch-icon|manifest|amphtml>` = that rel (one per doc); other `rel` (stylesheet/preload/preconnect) = rel **+ href** (repeatable — a page ADDS a stylesheet, never wipes the site's); `<script type="application/ld+json">` = one per page (`id` to have several).
+- **No leaking across routes.** Every route mount **restores the baseline first, then applies** — never a diff between two pages. A page with no `<head>` resets the head to exactly what `public/index.html` shipped. (Bookkeeping you may see and should ignore: displaced baseline tags park in an inert `<template data-olum-head>`; contributed tags carry `data-olum-head`. That is what lets a prerendered page restore its own baseline.)
+- **JSON-LD:** a bare `{` stays JSON; `{expr}` compiles **only inside a double-quoted string**, inserted **raw** (not escaped) so the JSON stays valid — a `"` or `\` in the value would break it, so use `{JSON.stringify(x)}` (without surrounding quotes) for untrusted data.
+- **It follows state** (dev AND production): the head is rendered output, so a re-render of the PAGE re-renders it — `<title>{state.post.title}</title>` follows an `onMount` fetch. A state key only the head reads still counts as a render dep. A CHILD re-render never touches the head, and the head is only re-applied when its output actually changed (an unrelated write costs one template literal). Reactivity does NOT make a page indexable — unfurlers (Twitter/Slack/Facebook/LinkedIn) never run JS; for crawler-visible metadata the route must be prerendered, and an awaited value only reaches the built file if the prerenderer waited for it.
+- Must be **closed** (`<head>…</head>`); an unclosed one is ignored with a warning. Only the **first** `<head>` in a file is compiled.
+
+---
+
 ## Build & Deploy
 
-`npm run build` compiles every component, bundles with vite (installed into the project on the first build), and writes static output to `dist/` (`index.html` + hashed `assets/`: your JS, `main.css` plus every component style, and everything from `public/assets`). Compile errors fail the build (non-zero exit, no bundle). Files referenced only from runtime strings (`url(/assets/{type}.svg)`) are copied as-is. Host `dist/` anywhere static, but configure an **SPA fallback** to `index.html` (history mode — the router can't detect a missing rewrite):
+`npm run build` compiles every component, bundles with vite (installed into the project on the first build), and writes static output to `dist/` (`index.html` + hashed `assets/`: your JS, `main.css` plus every component style, and everything from `public/assets`). Compile errors fail the build (non-zero exit, no bundle). Files referenced only from runtime strings (`url(/assets/{type}.svg)`) are copied as-is. `npm start` serves `dist/` the way a static host would.
+
+### Prerendering / SSG (opt-in, recommended)
+**`src/sitemap.js` is the switch** — no such file, no prerendering, build behaves as before. It default-exports a (possibly `async`) function returning an array of route strings; it is normal app code (imports, fetch, DB), bundled with vite and run **at build time only** — it never ships to the browser.
+```js title="src/sitemap.js"
+import { getPosts } from "./api.js";
+export default async function () {
+  const posts = await getPosts();
+  return posts.map((post) => `/blog/${post.slug}`);   // only the CONCRETE urls behind dynamic segments
+}
+```
+Final list = **static routes from the file tree + sitemap.js routes**, deduped; anything still holding a `:param` is dropped (a pattern, not a URL), and a sitemap path no route can match is skipped. The build then serves `dist/` on a throwaway port, launches **puppeteer** (installed on demand, one-time ~150 MB Chrome download), visits each URL, waits for the router to mount into `#olum-app` (15 s cap), and saves the finished DOM — **head included** — as that route's own file:
+```
+dist/index.html  dist/about/index.html  dist/blog/hello/index.html  dist/sitemap.xml
+```
+- **No catch-all rewrite needed**: `/blog/hello` IS a file, so every static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages, S3, nginx) resolves the deep link with **zero configuration** — a server catch-all's behaviour without the server.
+- Intermediate segments get a file only when they are routes themselves (no `page.html` for `/match` → no `dist/match/index.html`).
+- `sitemap.xml` lists only routes that became real files; `<loc>` needs an absolute URL → package.json `{ "olum": { "SITE_URL": "https://ex.com" } }` (missing → it warns and emits relative paths).
+- **Pages that fetch their data** — a route is captured once the bundle settles and the router filled `#olum-app` (15 s ceiling on getting there), which is BEFORE an `onMount` await resolves. Snapshot there and you ship the loading state: empty `<h1>`, half-built `<title>`. Fix = settling time, off by default:
+```json title="package.json"
+{ "olum": { "SITE_URL": "https://ex.com", "SSG_DELAY": 500 } }
+```
+  **package.json `olum` settings** (both optional, both under the one `olum` key): `SITE_URL` = absolute base for every `<loc>` in sitemap.xml (missing → warns, emits relative `<loc>`s that crawlers ignore; trailing slash trimmed). `SSG_DELAY` = ms of settling time PER ROUTE before capture (`0`/missing = no wait; non-numeric like `true`/`-1` → error line, treated as `0`, never fails the build).
+  The `<head>` re-renders with the page, so metadata and markup catch up together — the file gets both or neither. Start at 200–500ms; the build prints the bill (`SSG: waiting 500ms after each route (+46.5s to this build)`), then VERIFY the file (`grep -o "<title[^>]*>[^<]*</title>" dist/match/liverpool/index.html`) because this is the setting that fails quietly. Blunt tool: too short writes a half-finished page while STILL printing a tick; too long is paid on every route; it is a fixed wait, not a measurement, so a slow API or CI can miss a value that works locally. Only mount-time work is waited for — a click/timer/observer load is not in the snapshot.
+- A route that fails to render is reported (`✗ …`), not fatal: it keeps the plain shell and is left out of `sitemap.xml`. `/` renders last (the preview server answers unknown URLs with it, so it must stay a blank shell meanwhile).
+- The prerendered markup is **replaced, not hydrated** — it is for SEO / first paint / direct route access. Anything that must survive into the live app lives in `state`.
+- **Client components, server-component SEO**: you write normal client-side Olum (state, events, DOM APIs); the same code produces the crawlable HTML.
+
+**Without prerendering**, host `dist/` anywhere static but configure an **SPA fallback** to `index.html` (history mode — the router can't detect a missing rewrite). Harmless to keep with prerendering, and correct when only *some* routes are prerendered:
 ```
 Netlify  public/_redirects:  /*  /index.html  200
 Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }

@@ -36,9 +36,9 @@ const outputTree = [
   { depth: 1, name: "not-found.html", file: true, route: "404" },
 ];
 
-export default function ComingNextSection() {
+export default function StaticRoutingSection() {
   return (
-    <section className="py-24 sm:py-32 relative overflow-hidden bg-[var(--bg)]" id="coming-next">
+    <section className="py-24 sm:py-32 relative overflow-hidden bg-[var(--bg)]" id="static-routing">
       {/* Top separator */}
       <div
         className="absolute top-0 left-0 right-0 h-px"
@@ -56,7 +56,7 @@ export default function ComingNextSection() {
         <div className="text-center mb-14">
           <div className="inline-flex items-center gap-2 text-xs font-mono font-semibold text-[#25C97E] tracking-widest uppercase mb-4 px-3 py-1.5 bg-[rgba(37,201,126,0.07)] border border-[rgba(37,201,126,0.15)] rounded-full">
             <span className="h-1.5 w-1.5 rounded-full bg-[#25C97E] animate-pulse" />
-            Coming next · in the works
+            SEO · Static routing
           </div>
 
           <h2
@@ -128,16 +128,16 @@ export default function ComingNextSection() {
         </div>
 
         {/* Foot note */}
-        <p className="mt-8 text-center text-[13px] text-[var(--fg-subtle)]">
-          Still in development — no release date yet.{" "}
+        {/* <p className="mt-8 text-center text-[13px] text-[var(--fg-subtle)]">
+          Available now in the latest release.{" "}
           <a
             href="https://github.com/olumjs"
             className="text-[#25C97E] hover:brightness-125 underline underline-offset-4 decoration-[rgba(37,201,126,0.35)] transition-all duration-200"
           >
-            Follow the progress on GitHub
+            Read the docs on GitHub
           </a>
           .
-        </p>
+        </p> */}
 
       </div>
     </section>

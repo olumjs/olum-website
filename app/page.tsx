@@ -2,7 +2,7 @@ import Hero from "@/components/Hero";
 import FeatureSection from "@/components/FeatureSection";
 import SyntaxCompareSection from "@/components/SyntaxCompareSection";
 import BenchmarkSection from "@/components/BenchmarkSection";
-import ComingNextSection from "@/components/ComingNextSection";
+import StaticRoutingSection from "@/components/StaticRoutingSection";
 // import TestimonialsSection from "@/components/TestimonialsSection";
 import ShowcaseSection from "@/components/ShowcaseSection";
 import ContributorsSection from "@/components/ContributorsSection";
@@ -17,7 +17,7 @@ export default function Home() {
       <FeatureSection />
       <SyntaxCompareSection />
       <BenchmarkSection />
-      <ComingNextSection />
+      <StaticRoutingSection />
       {/* <TestimonialsSection /> */}
       <ShowcaseSection />
       <ContributorsSection />

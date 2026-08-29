@@ -1,9 +1,11 @@
 const techStack = [
   // { name: "TypeScript", slug: "typescript", color: "#3178C6" },
+  { name: "Search Console", slug: "googlesearchconsole", color: "#458CF5" },
   { name: "Vite",       slug: "vite",       color: "#646CFF" },
   { name: "Tailwind",   slug: "tailwindcss", color: "#06B6D4" },
   { name: "Node.js",    slug: "nodedotjs",  color: "#5FA04E" },
   { name: "Vercel",     slug: "vercel",     color: "#ffffff", mono: true },
+  { name: "shadcn/ui",  slug: "shadcnui",   color: "#ffffff", mono: true },
   { name: "StackBlitz", slug: "stackblitz", color: "#1269D3" },
 ];
 

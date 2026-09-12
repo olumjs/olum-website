@@ -269,7 +269,7 @@ export default function Playground({
   }, [groups, navigatePreview]);
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--bg)] pt-[60px]">
+    <div className="flex h-screen flex-col bg-[var(--bg)] pt-[calc(60px+var(--ads-h))]">
       {/* Branded toolbar */}
       <div className="flex h-11 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--card)] px-4">
         <div className="flex items-center gap-3 min-w-0">

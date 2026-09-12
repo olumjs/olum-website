@@ -12,6 +12,10 @@
      dark from the very first frame — killing the white flash on reload. */
   color-scheme: dark;
 
+  /* Height of the promo ads bar. Set to 0 once dismissed so the fixed navbar
+     and every sticky/offset element that clears it collapse back up. */
+  --ads-h: 40px;
+
   --bg:               #09090b;
   --bg-alt:           #0d0d0f;
   --card:             #111113;
@@ -347,3 +351,14 @@ code span::selection { background: rgba(37,201,126,0.35) !important; color: #e2e
   padding-inline-start: 0;
 }
 .docs-md td .md-code { font-size: 0.78rem; }
+
+/* ─── Ads bar (promo banner above the navbar) ──────────────
+   The class is added to <html> pre-paint by the inline script in
+   app/layout.tsx, so a returning visitor who dismissed it never sees
+   a flash of the bar before JS hides it. */
+html.ads-dismissed {
+  --ads-h: 0px;
+}
+html.ads-dismissed .ads-bar {
+  display: none;
+}

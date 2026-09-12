@@ -58,7 +58,7 @@ export default async function DocsPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(docsBreadcrumb).replace(/</g, "\\u003c") }}
       />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[calc(5rem+var(--ads-h))]">
         <div className="flex gap-8 py-8">
           <DocsSidebar groups={groups} />
 
@@ -206,7 +206,7 @@ export default async function DocsPage() {
 
           {/* Right aside */}
           <aside className="hidden xl:block w-52 shrink-0">
-            <div className="sticky top-24">
+            <div className="sticky top-[calc(6rem+var(--ads-h))]">
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--fg-subtle)] font-mono mb-3">
                 On this page
               </h4>

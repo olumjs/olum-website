@@ -212,7 +212,7 @@ export default async function BlogPostPage({ params }: Props) {
       />
 
       {/* Hero */}
-      <section className="relative pt-28 pb-12 overflow-hidden">
+      <section className="relative pt-[calc(7rem+var(--ads-h))] pb-12 overflow-hidden">
         <div className="absolute inset-0 bg-dot-grid opacity-30" />
         <div
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[400px] pointer-events-none"

@@ -118,7 +118,7 @@ export default function DocsSidebar({
       <div
         ref={scrollRef}
         onScroll={(e) => sessionStorage.setItem("docs-sidebar-scroll", String(e.currentTarget.scrollTop))}
-        className="sticky top-24 overflow-y-auto max-h-[calc(100vh-6rem)] pr-2 scrollbar-thin"
+        className="sticky top-[calc(6rem+var(--ads-h))] overflow-y-auto max-h-[calc(100vh-6rem-var(--ads-h))] pr-2 scrollbar-thin"
       >
         <nav className="space-y-6 pb-12">
           {groups.map((group) => {

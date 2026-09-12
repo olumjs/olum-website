@@ -125,7 +125,7 @@ export default async function DocSectionPage({ params, searchParams }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(docStructuredData).replace(/</g, "\\u003c") }}
       />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[calc(5rem+var(--ads-h))]">
         <div className="flex gap-8 py-8">
           <DocsSidebar groups={groups} activeRepo={version?.repo} activeRef={version?.ref} />
 
@@ -192,7 +192,7 @@ export default async function DocSectionPage({ params, searchParams }: Props) {
 
           {/* On-this-page TOC (h2 headings from the doc) + Edit-on-GitHub link */}
           <aside className="hidden xl:block w-52 shrink-0">
-            <div className="sticky top-24">
+            <div className="sticky top-[calc(6rem+var(--ads-h))]">
               {toc.length > 0 && (
                 <>
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--fg-subtle)] font-mono mb-3">

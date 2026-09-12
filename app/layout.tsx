@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import AdsBar from "@/components/AdsBar";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
 import { getDocsNav } from "@/lib/docs-content";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -132,7 +133,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             preference is never consulted, so there is no theme flash on reload. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('olum-theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}`,
+            __html: `try{var t=localStorage.getItem('olum-theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');if(localStorage.getItem('olum-ads-dismissed')==='1')document.documentElement.classList.add('ads-dismissed')}catch(e){document.documentElement.setAttribute('data-theme','dark')}`,
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -140,6 +141,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="bg-[var(--bg)] text-[var(--fg)] antialiased min-h-screen">
         <ThemeProvider>
+          <AdsBar />
           <Navbar navGroups={navGroups} githubStars={githubStars} />
           {children}
           <AnalyticsTracker />

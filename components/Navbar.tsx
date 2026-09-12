@@ -330,7 +330,7 @@ export default function Navbar({
       {searchOpen && <SearchModal onClose={closeSearch} searchLinks={searchLinks} />}
 
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "backdrop-blur-2xl border-b border-[var(--border)]" : ""}`}
+        className={`fixed top-[var(--ads-h)] left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "backdrop-blur-2xl border-b border-[var(--border)]" : ""}`}
         style={scrolled ? { background: "color-mix(in srgb, var(--bg) 88%, transparent)" } : undefined}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[60px] flex items-center justify-between gap-4">

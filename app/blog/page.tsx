@@ -135,7 +135,7 @@ export default async function BlogPage({ searchParams }: Props) {
       />
 
       {/* Hero header */}
-      <section className="relative pt-32 pb-16 overflow-hidden">
+      <section className="relative pt-[calc(8rem+var(--ads-h))] pb-16 overflow-hidden">
         <div className="absolute inset-0 bg-dot-grid opacity-40" />
         <div
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] pointer-events-none"

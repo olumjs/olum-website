@@ -283,7 +283,7 @@ export default function EditorPage() {
   // ─── Render ──
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <main className="max-w-7xl mx-auto px-6 pt-24 pb-28">
+      <main className="max-w-7xl mx-auto px-6 pt-[calc(6rem+var(--ads-h))] pb-28">
         {/* Sub-header (sits below the global fixed navbar) */}
         <div className="flex items-center justify-between mb-8">
           <Link href="/blog" className="inline-flex items-center gap-2 text-sm text-[var(--fg-muted)] hover:text-[#25C97E] transition-colors">
@@ -297,7 +297,7 @@ export default function EditorPage() {
 
         <div className="flex gap-6 items-start">
           {/* ── Sidebar: Existing Posts ── */}
-          <aside className="w-72 shrink-0 sticky top-24 max-h-[calc(100vh-7rem)] flex flex-col gap-3 overflow-hidden">
+          <aside className="w-72 shrink-0 sticky top-[calc(6rem+var(--ads-h))] max-h-[calc(100vh-7rem-var(--ads-h))] flex flex-col gap-3 overflow-hidden">
             <p className={secLbl}>
               Posts{!postsLoading && <span className="opacity-40 ml-1">({posts.length})</span>}
             </p>

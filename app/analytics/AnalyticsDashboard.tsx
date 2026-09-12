@@ -1459,7 +1459,7 @@ export default function AnalyticsDashboard() {
         {/* ── Recent Visits ── */}
         <div className={
           visitsFullscreen
-            ? "fixed inset-x-0 bottom-0 top-[60px] z-40 flex flex-col bg-[var(--bg)]"
+            ? "fixed inset-x-0 bottom-0 top-[calc(60px+var(--ads-h))] z-40 flex flex-col bg-[var(--bg)]"
             : `mt-4 ${CARD} overflow-hidden`
         }>
           <div className={`px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap ${visitsFullscreen ? "shrink-0" : ""}`}>
@@ -1743,7 +1743,7 @@ export default function AnalyticsDashboard() {
 
           <div className={
             telemetryFullscreen
-              ? "fixed inset-x-0 bottom-0 top-[60px] z-40 flex flex-col bg-[var(--bg)]"
+              ? "fixed inset-x-0 bottom-0 top-[calc(60px+var(--ads-h))] z-40 flex flex-col bg-[var(--bg)]"
               : `${CARD} overflow-hidden`
           }>
             <div className={`px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-4 flex-wrap ${telemetryFullscreen ? "shrink-0" : ""}`}>

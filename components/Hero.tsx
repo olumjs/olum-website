@@ -47,7 +47,7 @@ export default function Hero() {
       />
 
       {/* ── Content ─────────────────────────────────────────── */}
-      <div className="relative z-10 w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20 flex flex-col items-center text-center gap-8">
+      <div className="relative z-10 w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-[calc(6rem+var(--ads-h))] pb-20 flex flex-col items-center text-center gap-8">
 
         {/* Logo with halo rings */}
         <div

@@ -357,7 +357,7 @@ Import `onMount` from `olum`; the callback runs on mount; **return a cleanup fun
   });
 </script>
 ```
-`host` is the component's own root element — use it instead of `document.querySelector`. `onMount` is also where you do **refs**, **actions** (there is no `bind:this` / `use:action`), and **global `window`/`document` listeners** — all wired imperatively and cleaned up in the return.
+All cleanups also run, children first, when the whole app is torn down with `app.destroy()` (see Embedding — under maintenance). `host` is the component's own root element — use it instead of `document.querySelector`. `onMount` is also where you do **refs**, **actions** (there is no `bind:this` / `use:action`), and **global `window`/`document` listeners** — all wired imperatively and cleaned up in the return.
 Same shape for **observers** and anything the element owns: `new ResizeObserver(...).observe(host.querySelector(".box"))` → `return () => observer.disconnect()`; a `<canvas>` `requestAnimationFrame` loop → `cancelAnimationFrame`; a `<video>`'s `currentTime` read per frame (its `onplay`/`onpause`/`onloadedmetadata` still work inline).
 
 ---
@@ -532,6 +532,32 @@ Manual router config: build a `routes` array of `{ path, comp }`, `new Router({ 
 
 ---
 
+## Embedding in React / Vue — `app.destroy()` (UNDER MAINTENANCE)
+
+**Experimental — the API and the rules below can still change. Do not suggest it for production code.**
+Mount as usual; call `app.destroy()` when the host unmounts. `$()` takes a selector **or an element** (a ref).
+```jsx
+// React
+useEffect(() => {
+  const app = new Olum();
+  app.$(ref.current).use(App);
+  return () => app.destroy();
+}, []);
+return <div ref={ref} />;
+```
+```js
+// Vue
+onMounted(() => { app = new Olum(); app.$(el.value).use(App); });
+onBeforeUnmount(() => app.destroy());
+```
+- `destroy()` runs every mounted component's `onMount` cleanup (children first), removes the runtime's `window` listener, drops queued re-renders, restores `document.head`, and empties the root. Safe to call twice or before `use()`. Mount → destroy → mount (React StrictMode) works.
+- Component `<style>` tags stay (injected once at module load, so a remount keeps its CSS).
+- **One Olum app per page at a time** (global runtime state) — destroy the old one before mounting a new one.
+- **No olum-router inside a host app** — mount one component, let the host router pick pages, switch views inside with state + `<if>`.
+- No `<head>` in embedded components; the host must not render children into the Olum root.
+
+---
+
 ## Global Store (olum-store)
 
 Zustand-style shared state: define once in a plain `.js` module, import anywhere; components **subscribe by reading** it during render and re-render on change. No providers, no wiring.
@@ -684,6 +710,8 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 | `state.todos = state.todos` | assign a fresh array (spread/map/filter) | same-reference write is a no-op |
 | `url(assets/x.svg)` / `src="assets/…"` | `/assets/…` (leading slash) | asset URLs are root-absolute |
 | arrow action in store | method shorthand `add() {}` | arrows don't bind `this` |
+| embedding: clearing the root with `innerHTML = ""` | `app.destroy()` | clearing skips cleanups and leaks the runtime listener |
+| embedding: `olum-router` inside React/Vue | one component + host router | two routers fight over history |
 
 ---
 

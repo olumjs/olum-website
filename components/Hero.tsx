@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import CliCommand from "@/components/CliCommand";
+import HeroDemoVideo from "@/components/HeroDemoVideo";
 
 const CLI_CMD = "npx create-olum my-app --tailwind";
 
@@ -47,7 +48,7 @@ export default function Hero() {
       />
 
       {/* ── Content ─────────────────────────────────────────── */}
-      <div className="relative z-10 w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-[calc(6rem+var(--ads-h))] pb-20 flex flex-col items-center text-center gap-8">
+      <div className="relative z-10 w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-[calc(6rem+var(--ads-h))] pb-12 flex flex-col items-center text-center gap-8">
 
         {/* Logo with halo rings */}
         <div
@@ -144,6 +145,11 @@ export default function Hero() {
           Omit <span className="text-[var(--fg-2)]">--tailwind</span> to skip Tailwind CSS setup.
         </p>
 
+        {/* Demo video */}
+        <div className="animate-fade-up animate-fade-up-7 w-full mt-4">
+          <HeroDemoVideo />
+        </div>
+
         {/* Stats */}
         {/* <div
           className="animate-fade-up flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-14 pt-2"
@@ -176,7 +182,7 @@ export default function Hero() {
 
       {/* Bottom fade into next section */}
       <div
-        className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
+        className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
         style={{ background: "linear-gradient(to top, var(--bg), transparent)" }}
       />
     </section>

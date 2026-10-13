@@ -141,7 +141,10 @@ export default function Footer() {
           <div className="flex items-center gap-1 text-sm text-[var(--fg-subtle)]">
             <span>Made with</span>
             <span className="text-[#25C97E]">♥</span>
-            <span>by the Community </span>
+            <span>by the Community · </span>
+            <Link href="/#creator" className="font-semibold text-[#25C97E] hover:underline transition-colors duration-150">
+              Hire the creator
+            </Link>
           </div>
         </div>
       </div>

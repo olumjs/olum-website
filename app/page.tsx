@@ -6,6 +6,7 @@ import StaticRoutingSection from "@/components/StaticRoutingSection";
 // import TestimonialsSection from "@/components/TestimonialsSection";
 import ShowcaseSection from "@/components/ShowcaseSection";
 import ContributorsSection from "@/components/ContributorsSection";
+import CreatorSection from "@/components/CreatorSection";
 import PalestineSection from "@/components/PalestineSection";
 import CTASection from "@/components/CTASection";
 import Footer from "@/components/Footer";
@@ -21,6 +22,7 @@ export default function Home() {
       {/* <TestimonialsSection /> */}
       <ShowcaseSection />
       <ContributorsSection />
+      <CreatorSection />
       <PalestineSection />
       <CTASection />
       <Footer />

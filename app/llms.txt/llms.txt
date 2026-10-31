@@ -508,7 +508,7 @@ Same URL (path + query) as now → `<a to>`, `push()`, `replace()` do nothing: n
 
 **Programmatic navigation** from `olum`:
 ```js
-import { push, replace, back, forward, go, pathname, searchParams } from "olum";
+import { push, replace, back, forward, go, pathname, searchParams, setSearchParam } from "olum";
 push("/cart");        // pushState — Back returns to prev page
 replace("/dashboard"); // replaceState — for redirects (login), removes current from history
 back(); forward(); go(-2);
@@ -516,9 +516,43 @@ pathname();           // current route path (normalized, leading slash, no trail
 searchParams();       // query as an object: ?size=10&tag=a&tag=b -> { size: 10, tag: ["a","b"] }
                       // exact numbers only ("02134", "1e3", "0x10" stay strings; "true" stays a string); case kept
                       // no prototype (a `__proto__` key is just a value); works in hash mode too (query inside or before the hash)
-                      // not reactive: read on call; a new query re-renders the page, so a page's <script> re-reads it
+                      // not reactive: read on call; NAVIGATING to a new query (link, push, Back/Forward) re-renders the page, so its <script> re-reads it
+setSearchParam("color", "Blue"); // replaceState ONE param in place: NO re-render, page keeps state (focus, scroll, input), no history entry
+setSearchParam("tag", ["a", "b"]); // array -> repeated key ?tag=a&tag=b (searchParams() reads it back as an array)
+setSearchParam("color", null);  // null / undefined / "" / [] deletes the key; 0 and false are written as "0" / "false"
 ```
-To change the query, navigate to a path carrying one: `push("/shop?size=12")` — the path part is matched (lowercased), the query is kept exactly as written. `pathname()` never includes the query.
+**Changing the query — pick by whether the page should render:**
+- `push("/shop?size=12")` — navigates: re-renders (the page's `<script>` runs again, state resets), adds a history entry. The path part is matched (lowercased), the query is kept exactly as written.
+- `replace("/shop?size=12")` — same, without a Back step.
+- `setSearchParam("size", 12)` — only updates the URL: no render, no history entry. For UI state that should survive a reload / shared link (tab, filter, page, search box).
+
+`setSearchParam` pattern — read the URL once into `state`, write each change to both:
+```html title="src/shop/page.html"
+<script>
+  import { searchParams, setSearchParam } from "olum";
+  const TABS = ["all", "new", "sale"];
+  const q = searchParams();
+  const state = {
+    tab: TABS.includes(q.tab) ? q.tab : "all",                // validate: the URL is user input
+    page: typeof q.page === "number" && q.page > 1 ? q.page : 1,
+    search: q.search === undefined ? "" : String(q.search),  // "10" arrives as the number 10
+  };
+  const setTab = (tab) => { state.tab = tab; setSearchParam("tab", tab === "all" ? null : tab); }; // default stays out of the URL
+  const setPage = (n) => { state.page = n; setSearchParam("page", n === 1 ? null : n); };
+  const setSearch = (v) => { state.search = v; setSearchParam("search", v); };          // "" removes it
+</script>
+<for each="tab of TABS"><button class="{state.tab === tab ? 'active' : ''}" onclick="setTab(tab)">{tab}</button></for>
+<input value="{state.search}" oninput="(e) => setSearch(e.target.value)" />   <!-- URL updates per keystroke, focus kept -->
+<button onclick="setPage(state.page + 1)">Next ({state.page})</button>
+```
+`setSearchParam` details:
+- One key replaces ALL its values (`setSearchParam("tag", "c")` on `?tag=a&tag=b` → `?tag=c`). A one-item array reads back as a plain value — `[].concat(q.tag)` normalizes. Values become strings; keys/values keep their case.
+- Keeps the path, other params, the `#id` and `history.state`; writing the value the URL already has does nothing. The whole query is re-encoded on change (space → `+`, bare `?flag` → `?flag=`); values read back the same.
+- Hash mode: written inside the hash (`/#/shop?color=Blue`); a copy of the key before the hash (`/?color=x#/shop`) is removed.
+- Fires NO `popstate` / `viewLoaded` / render: other components keep their old `searchParams()` value until they read it again — share the value via `state`/props or the store instead. Back skips these changes (leaves the page); use `push()` when each step should be undoable with Back.
+- `#id` links still work after it: an `<a href="#comments">` on the same page only scrolls; `push()` to the page without the query re-renders.
+
+`pathname()` never includes the query.
 
 **Route params** — `params()` from `olum`, called once at top level of `<script>`:
 ```html title="src/blog/[slug]/page.html"
@@ -719,6 +753,7 @@ Vercel   vercel.json:        { "rewrites": [{ "source": "/(.*)", "destination": 
 | `each="i of state.n"` | `each="i of Array.from({length: state.n}, (_,k)=>k+1)"` | numeric range needs a literal number |
 | two `onMount(…)` calls | one call, one combined cleanup | only the first is wired |
 | `params()` / `props()` twice | destructure once at top level | only the first call is compiled |
+| `push("/shop?tab=" + tab)` to keep a filter in the URL | `setSearchParam("tab", tab)` (+ write `state`) | `push()` re-renders the page and resets its state; `setSearchParam()` only updates the URL |
 | `const { a, ...rest } = props()` | read extras via `props()` | `rest` is a snapshot, not live |
 | `const { color } = props(); color = "x"` | `onChange("x")` via callback prop | props are read-only |
 | `state.todos = state.todos` | assign a fresh array (spread/map/filter) | same-reference write is a no-op |
